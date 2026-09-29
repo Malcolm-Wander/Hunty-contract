@@ -2727,7 +2727,9 @@ impl Storage {
         (symbol_short!("HRLCT"), creator.clone())
     }
 
-    pub fn get_creator_daily_hunt_count(env: &Env, creator: &Address, day: u64) -> u32 {
+    const HUNT_CREATION_WINDOW_SECS: u64 = 24 * 60 * 60;
+
+    fn read_creator_hunt_window(env: &Env, creator: &Address) -> Option<CreatorDailyHuntCount> {
         let key = Self::creator_daily_count_key(creator);
 
         let stored: Option<CreatorDailyHuntCount> = env.storage().persistent().get(&key);
@@ -2737,9 +2739,14 @@ impl Storage {
 
             _ => 0,
         }
+        active
     }
 
-    pub fn set_creator_daily_hunt_count(env: &Env, creator: &Address, day: u64, count: u32) {
+    pub fn get_creator_daily_hunt_count(env: &Env, creator: &Address, _day: u64) -> u32 {
+        Self::pruned_creator_hunt_timestamps(env, creator).len()
+    }
+
+    pub fn set_creator_daily_hunt_count(env: &Env, creator: &Address, _day: u64, count: u32) {
         let key = Self::creator_daily_count_key(creator);
 
         let entry = CreatorDailyHuntCount { day, count };
