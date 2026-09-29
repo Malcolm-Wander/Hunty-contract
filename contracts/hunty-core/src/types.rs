@@ -92,8 +92,6 @@ pub struct Hunt {
     pub max_players: u32,
     /// When true, only players with a valid invite code may register.
     pub is_private: bool,
-    /// SHA256 hash (salted with hunt_id) of the invite code, if configured.
-    pub invite_code_hash: Option<BytesN<32>>,
     /// Dynamically recalculated on every `get_hunt` read; not meaningful when read from a raw struct literal.
     pub remaining_slots: u32,
     /// Controls who can view the hunt's leaderboard. Defaults to Public.

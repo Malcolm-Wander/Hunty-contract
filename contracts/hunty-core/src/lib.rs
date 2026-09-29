@@ -68,6 +68,9 @@ const MAX_QUESTION_LENGTH: u32 = 2000;
 const MAX_ANSWER_LENGTH: u32 = 256;
 /// Maximum invite-code length in bytes.
 const MAX_INVITE_CODE_LENGTH: usize = 256;
+/// Minimum invite-code length in bytes. Short human-chosen codes are trivially
+/// brute-forced offline, so we require a reasonable minimum length.
+const MIN_INVITE_CODE_LENGTH: usize = 8;
 const MAX_CATEGORY_BYTES: u32 = 64;
 const MAX_CATEGORIES_PER_HUNT: u32 = 5;
 const MAX_CLUES_PER_HUNT: u32 = 100;

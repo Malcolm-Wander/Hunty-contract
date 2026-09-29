@@ -548,6 +548,13 @@ impl Storage {
             } else {
                 hunt.max_players.saturating_sub(count)
             };
+
+            // Never expose the invite code hash through public getters.
+            // The hash is salted only with the public hunt_id, so returning
+            // it would let anyone brute-force short human-chosen invite
+            // codes offline. Callers that need to verify a code must go
+            // through the on-chain `join_private_hunt` entry point.
+            hunt.invite_code_hash = None;
         }
 
         result
@@ -583,6 +590,15 @@ impl Storage {
 
     pub fn get_hunt_or_error(env: &Env, hunt_id: u64) -> Result<Hunt, HuntError> {
         Self::get_hunt(env, hunt_id).ok_or(HuntError::HuntNotFound)
+    }
+
+    /// Returns a sanitized copy of a hunt suitable for public consumption.
+    /// Strips `invite_code_hash` so it can never leak through `get_hunt_info`,
+    /// `list_hunts`, `search_hunts`, or any other read path.
+    pub fn sanitize_hunt_for_public(hunt: &Hunt) -> Hunt {
+        let mut sanitized = hunt.clone();
+        sanitized.invite_code_hash = None;
+        sanitized
     }
 
     // ========== Hunt Cache Functions (instance storage) ==========
