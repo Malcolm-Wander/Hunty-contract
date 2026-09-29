@@ -1,7 +1,9 @@
 use soroban_sdk::{contracttype, Address, BytesN, Vec};
 
 pub use reward_interface::{
-    resolve_tier_amount, tiers_are_strictly_ascending, RewardConfig, TierError, TimeBasedRewardTier,
+    rank_tiers_are_strictly_ascending, resolve_rank_tier_amount, resolve_tier_amount,
+    tiers_are_strictly_ascending, RankBasedRewardTier, RankRewardTier, RewardConfig, TierError,
+    TimeBasedRewardTier,
 };
 
 /// How XLM rewards are calculated from the pool at distribution time.
@@ -32,10 +34,17 @@ pub struct DistributionProof {
 }
 
 /// Resolution outcome for a manually resolved failed distribution.
+///
+/// This enum tracks the final status of distributions that failed during
+/// their initial execution and were later resolved by an administrator.
+///
+/// Related to issue #364: stuck-distribution resolution flow.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResolutionStatus {
+    /// The distribution was successfully completed after manual intervention.
     Completed,
+    /// The distribution was refunded to the pool after failing.
     Refunded,
 }
 
@@ -83,12 +92,11 @@ pub struct DistributionRecord {
 ///
 /// `time_based_tiers` is an optional list of (max_elapsed_seconds, xlm_amount)
 /// pairs that define a conditional reward schedule based on how quickly a
-/// player completes a hunt. When the list is empty, time-based conditional
-/// rewards are disabled and the rest of the system behaves exactly as
-/// before this feature was added. When the list is non-empty it must be
-/// sorted in strictly ascending order of `max_completion_secs` (validated
-/// in `set_pool_tiers`). The list can be updated after pool creation via
-/// `set_pool_tiers` and queried via `get_pool_config`.
+/// player completes a hunt. `rank_based_tiers` is an optional list of exact
+/// one-based completion ranks and their amounts; a matching rank takes
+/// precedence over time and flat rewards. When both lists are empty the pool
+/// behaves exactly as before. Tier lists can be updated after pool creation
+/// and queried via `get_pool_config`.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RewardPoolConfig {
@@ -135,6 +143,14 @@ pub struct RewardPoolConfig {
     /// Whether reward NFTs minted from this pool are transferable.
     /// If false, NFTs are soulbound to the initial recipient.
     pub nft_transferable: bool,
+    /// Optional exact-rank reward tiers. A matching frozen completion rank
+    /// takes precedence over flat and time-based amounts.
+    pub rank_based_tiers: Vec<RankRewardTier>,
+    /// Address that most recently froze this pool, or `None` when the pool is
+    /// not frozen. Tracks whether the current freeze was issued by the pool
+    /// creator or the contract admin so that an admin-issued freeze can only be
+    /// lifted by the admin (#1077).
+    pub frozen_by: Option<Address>,
 }
 
 /// Full status of a reward pool, returned by get_reward_pool().
@@ -153,6 +169,9 @@ pub struct RewardPoolStatus {
     pub min_distribution_amount: i128,
     /// Whether distributions from this pool are temporarily frozen.
     pub frozen: bool,
+    /// Address that most recently froze this pool, or `None` when not frozen.
+    /// See `RewardPoolConfig::frozen_by` (#1077).
+    pub frozen_by: Option<Address>,
 }
 
 /// Pending NFT mint that failed and can be retried by the admin.
@@ -187,19 +206,46 @@ pub struct ValidationResult {
 }
 
 /// Operation type for the pool audit log.
+///
+/// Values are explicit and append-only so adding operations does not renumber
+/// records written by older deployments.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[repr(u32)]
 pub enum PoolOperation {
-    Create,
-    Fund,
-    Distribute,
-    Withdraw,
-    Freeze,
-    Unfreeze,
+    Create = 0,
+    Fund = 1,
+    Distribute = 2,
+    /// Funds were withdrawn by an administrator.
+    Withdraw = 3,
+    /// The pool was frozen by its creator or the administrator.
+    Freeze = 4,
+    /// The pool was unfrozen by its creator or the administrator.
+    Unfreeze = 5,
     /// Unused balance was migrated out to (or into) another hunt's pool.
-    Migrate,
-    /// Pool balance was refunded to the pool creator.
-    Refund,
+    Migrate = 6,
+    /// Unused balance was refunded to the pool creator.
+    Refund = 7,
+    /// `update_pool_config` changed `min_distribution_amount` (`amount` = new value).
+    UpdateMinAmount = 8,
+    /// `set_pool_target_amount` changed the funding target (`amount` = new value).
+    SetTargetAmount = 9,
+    /// `set_min_distribution_interval` changed the distribution cooldown.
+    SetDistributionInterval = 10,
+    /// `set_distribution_mode` switched between Fixed and Proportional.
+    SetDistributionMode = 11,
+    /// `set_pool_nft_contract` set or cleared the pool's NFT contract.
+    SetNftContract = 12,
+    /// `add_delegate` authorised a new distribution delegate.
+    AddDelegate = 13,
+    /// `remove_delegate` revoked a distribution delegate.
+    RemoveDelegate = 14,
+    /// `set_vesting_period_secs` changed the vesting period.
+    SetVestingPeriod = 15,
+    /// `set_pool_tiers` replaced the time-based tier schedule.
+    SetTimeTiers = 16,
+    /// `set_pool_rank_tiers` replaced the rank-based tier schedule.
+    SetRankTiers = 17,
 }
 
 /// Comprehensive statistics for a reward pool, returned by get_pool_statistics().

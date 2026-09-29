@@ -1,9 +1,8 @@
 # Contract API Reference
 
-# Contract API Reference
-
 This file is generated automatically from the Rust contract sources in `contracts/`.
 Run `make build` to regenerate it whenever contract APIs change.
+
 
 ## `common` Contract
 
@@ -84,6 +83,7 @@ pub fn initialize_admin(env: Env, admin: Address) -> Result<(), HuntErrorCode>
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -158,6 +158,7 @@ pub fn pause_contract(env: Env, admin: Address) -> Result<(), HuntErrorCode>
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -232,6 +233,7 @@ pub fn unpause_contract(env: Env, admin: Address) -> Result<(), HuntErrorCode>
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -258,25 +260,25 @@ pub fn is_contract_paused(env: Env) -> bool
 Creates a new scavenger hunt with the provided metadata.
 
 # Arguments
-
-- `env` - The Soroban environment
-- `creator` - The address of the hunt creator (typically use env.invoker() from the caller)
-- `title` - The title of the hunt (max 200 characters)
-- `description` - The description of the hunt (max 2000 characters)
-- `start_time` - Optional start timestamp. When set, players cannot register
-  or submit answers until the ledger timestamp reaches this value. 0 means
-  no start time restriction (immediately playable once activated).
-- `end_time` - Optional end timestamp (0 means no end time restriction)
+* `env` - The Soroban environment
+* `creator` - The address of the hunt creator (typically use env.invoker() from the caller)
+* `title` - The title of the hunt (max 200 characters)
+* `description` - The description of the hunt (max 2000 characters)
+* `start_time` - Optional start timestamp (0 or None means no start time restriction).
+When set, players cannot register or submit answers until the ledger timestamp
+reaches this value. Must be strictly less than `end_time` if `end_time` is also set.
+* `end_time` - Optional end timestamp (0 or None means no end time restriction)
+* `max_submissions_per_minute` - Maximum number of submissions allowed per
+minute per player. [`UNLIMITED_SUBMISSIONS_PER_MINUTE`] (0) means no limit.
 
 # Returns
-
 The unique hunt ID of the newly created hunt
 
 # Errors
-
-- `InvalidTitle` - If title is empty or exceeds maximum length
-- `InvalidDescription` - If description exceeds maximum length
-- `InvalidAddress` - If creator address is invalid
+* `InvalidTitle` - If title is empty or exceeds maximum length
+* `InvalidDescription` - If description exceeds maximum length
+* `InvalidAddress` - If creator address is invalid
+* `InvalidTimeBonusConfig` - If the initial score multiplier is outside 1x..=5x
 
 **Signature:**
 
@@ -352,6 +354,7 @@ pub fn create_hunt(env: Env, creator: Address, title: String, description: Strin
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -359,13 +362,9 @@ pub fn create_hunt(env: Env, creator: Address, title: String, description: Strin
 
 Creates a new draft hunt by copying clues from an existing completed hunt.
 
-The template hunt must already be completed. The copied hunt starts as a fresh
-draft with a new hunt ID, creator, title, and description, but reuses the
-template's clue questions, hashes, points, and required flags.
-Clones an existing hunt into a new draft.
-The caller must be the original hunt creator.
-All clues are duplicated with new clue IDs.
-Returns the new hunt ID.
+Backwards-compatible wrapper: older callers can still clone a completed hunt, but
+secure rehashing requires a caller-supplied answer list. The explicit
+`clone_hunt_with_answers` entry point preserves answer isolation for cloned clues.
 
 **Signature:**
 
@@ -435,6 +434,85 @@ pub fn clone_hunt(env: Env, template_hunt_id: u64, caller: Address) -> Result<u6
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
+
+---
+
+#### `clone_hunt_with_answers`
+
+Secure clone path that rehashes cloned clues against the new hunt/clue context.
+The creator must supply the plaintext answers for each clue in the template.
+
+**Signature:**
+
+```rust
+pub fn clone_hunt_with_answers(env: Env, template_hunt_id: u64, caller: Address, answers: Vec<String>) -> Result<u64, HuntErrorCode>
+```
+
+**Parameters:**
+
+- `env: Env`
+- `template_hunt_id: u64`
+- `caller: Address`
+- `answers: Vec<String>`
+
+**Returns:** `Result<u64, HuntErrorCode>`
+
+**Error type:** `HuntErrorCode`
+
+**Error codes:**
+
+- `HuntNotFound` = 1
+- `ClueNotFound` = 2
+- `InvalidHuntStatus` = 3
+- `PlayerNotRegistered` = 4
+- `ClueAlreadyCompleted` = 5
+- `InvalidAnswer` = 6
+- `HuntNotActive` = 7
+- `Unauthorized` = 8
+- `InsufficientRewardPool` = 9
+- `DuplicateRegistration` = 10
+- `InvalidTitle` = 11
+- `InvalidDescription` = 12
+- `InvalidAddress` = 13
+- `TooManyClues` = 14
+- `InvalidQuestion` = 15
+- `RefundFailed` = 16
+- `NoCluesAdded` = 17
+- `HuntNotCompleted` = 18
+- `RewardAlreadyClaimed` = 19
+- `RewardDistributionFailed` = 20
+- `NoRewardsConfigured` = 21
+- `DuplicateSubmission` = 22
+- `SubmissionExpired` = 23
+- `BannedPlayer` = 24
+- `NoRequiredClues` = 25
+- `RateLimitExceeded` = 26
+- `ScoreOverflow` = 27
+- `RegistrationsPaused` = 28
+- `AnswersPaused` = 29
+- `RewardsPaused` = 30
+- `HuntEndTimeInPast` = 31
+- `NoPendingAdmin` = 32
+- `PendingAdminMismatch` = 33
+- `InvalidRarity` = 34
+- `InvalidTimeBonusConfig` = 35
+- `AddressBlacklisted` = 36
+- `ContractPaused` = 37
+- `InvalidMaxAttempts` = 38
+- `InvalidWeight` = 39
+- `HintNotAvailable` = 40
+- `HintAlreadyUnlocked` = 41
+- `InsufficientScore` = 42
+- `TooManyCategories` = 43
+- `InvalidCategory` = 44
+- `InvalidDifficulty` = 45
+- `CorruptPlayerProgress` = 46
+- `HuntNotStarted` = 47
+- `AdminAlreadyProposed` = 48
+- `InvalidPoints` = 49
+- `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -509,6 +587,7 @@ pub fn set_time_bonus_config(env: Env, hunt_id: u64, caller: Address, time_bonus
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -587,6 +666,7 @@ pub fn set_max_attempts_per_clue(env: Env, hunt_id: u64, caller: Address, max_at
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -663,6 +743,7 @@ pub fn update_hunt_description(env: Env, hunt_id: u64, caller: Address, descript
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -739,6 +820,241 @@ pub fn set_max_players(env: Env, hunt_id: u64, caller: Address, max_players: u32
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
+
+---
+
+#### `set_registration_deadline`
+
+Sets the registration cutoff timestamp for a draft hunt. A value of 0 disables the cutoff.
+Only the hunt creator can call this, and only while the hunt is in Draft status.
+
+**Signature:**
+
+```rust
+pub fn set_registration_deadline(env: Env, hunt_id: u64, creator: Address, registration_deadline: u64) -> Result<(), HuntErrorCode>
+```
+
+**Parameters:**
+
+- `env: Env`
+- `hunt_id: u64`
+- `creator: Address`
+- `registration_deadline: u64`
+
+**Returns:** `Result<(), HuntErrorCode>`
+
+**Error type:** `HuntErrorCode`
+
+**Error codes:**
+
+- `HuntNotFound` = 1
+- `ClueNotFound` = 2
+- `InvalidHuntStatus` = 3
+- `PlayerNotRegistered` = 4
+- `ClueAlreadyCompleted` = 5
+- `InvalidAnswer` = 6
+- `HuntNotActive` = 7
+- `Unauthorized` = 8
+- `InsufficientRewardPool` = 9
+- `DuplicateRegistration` = 10
+- `InvalidTitle` = 11
+- `InvalidDescription` = 12
+- `InvalidAddress` = 13
+- `TooManyClues` = 14
+- `InvalidQuestion` = 15
+- `RefundFailed` = 16
+- `NoCluesAdded` = 17
+- `HuntNotCompleted` = 18
+- `RewardAlreadyClaimed` = 19
+- `RewardDistributionFailed` = 20
+- `NoRewardsConfigured` = 21
+- `DuplicateSubmission` = 22
+- `SubmissionExpired` = 23
+- `BannedPlayer` = 24
+- `NoRequiredClues` = 25
+- `RateLimitExceeded` = 26
+- `ScoreOverflow` = 27
+- `RegistrationsPaused` = 28
+- `AnswersPaused` = 29
+- `RewardsPaused` = 30
+- `HuntEndTimeInPast` = 31
+- `NoPendingAdmin` = 32
+- `PendingAdminMismatch` = 33
+- `InvalidRarity` = 34
+- `InvalidTimeBonusConfig` = 35
+- `AddressBlacklisted` = 36
+- `ContractPaused` = 37
+- `InvalidMaxAttempts` = 38
+- `InvalidWeight` = 39
+- `HintNotAvailable` = 40
+- `HintAlreadyUnlocked` = 41
+- `InsufficientScore` = 42
+- `TooManyCategories` = 43
+- `InvalidCategory` = 44
+- `InvalidDifficulty` = 45
+- `CorruptPlayerProgress` = 46
+- `HuntNotStarted` = 47
+- `AdminAlreadyProposed` = 48
+- `InvalidPoints` = 49
+- `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
+
+---
+
+#### `set_team_mode`
+
+Enables or disables team features for a draft hunt.
+Only the hunt creator can call this, and only while the hunt is in Draft status.
+
+**Signature:**
+
+```rust
+pub fn set_team_mode(env: Env, hunt_id: u64, creator: Address, team_mode: bool) -> Result<(), HuntErrorCode>
+```
+
+**Parameters:**
+
+- `env: Env`
+- `hunt_id: u64`
+- `creator: Address`
+- `team_mode: bool`
+
+**Returns:** `Result<(), HuntErrorCode>`
+
+**Error type:** `HuntErrorCode`
+
+**Error codes:**
+
+- `HuntNotFound` = 1
+- `ClueNotFound` = 2
+- `InvalidHuntStatus` = 3
+- `PlayerNotRegistered` = 4
+- `ClueAlreadyCompleted` = 5
+- `InvalidAnswer` = 6
+- `HuntNotActive` = 7
+- `Unauthorized` = 8
+- `InsufficientRewardPool` = 9
+- `DuplicateRegistration` = 10
+- `InvalidTitle` = 11
+- `InvalidDescription` = 12
+- `InvalidAddress` = 13
+- `TooManyClues` = 14
+- `InvalidQuestion` = 15
+- `RefundFailed` = 16
+- `NoCluesAdded` = 17
+- `HuntNotCompleted` = 18
+- `RewardAlreadyClaimed` = 19
+- `RewardDistributionFailed` = 20
+- `NoRewardsConfigured` = 21
+- `DuplicateSubmission` = 22
+- `SubmissionExpired` = 23
+- `BannedPlayer` = 24
+- `NoRequiredClues` = 25
+- `RateLimitExceeded` = 26
+- `ScoreOverflow` = 27
+- `RegistrationsPaused` = 28
+- `AnswersPaused` = 29
+- `RewardsPaused` = 30
+- `HuntEndTimeInPast` = 31
+- `NoPendingAdmin` = 32
+- `PendingAdminMismatch` = 33
+- `InvalidRarity` = 34
+- `InvalidTimeBonusConfig` = 35
+- `AddressBlacklisted` = 36
+- `ContractPaused` = 37
+- `InvalidMaxAttempts` = 38
+- `InvalidWeight` = 39
+- `HintNotAvailable` = 40
+- `HintAlreadyUnlocked` = 41
+- `InsufficientScore` = 42
+- `TooManyCategories` = 43
+- `InvalidCategory` = 44
+- `InvalidDifficulty` = 45
+- `CorruptPlayerProgress` = 46
+- `HuntNotStarted` = 47
+- `AdminAlreadyProposed` = 48
+- `InvalidPoints` = 49
+- `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
+
+---
+
+#### `set_allow_partial_scoring`
+
+Enables or disables partial-score claims for a draft hunt.
+Only the hunt creator can call this, and only while the hunt is in Draft status.
+
+**Signature:**
+
+```rust
+pub fn set_allow_partial_scoring(env: Env, hunt_id: u64, creator: Address, allow_partial_scoring: bool) -> Result<(), HuntErrorCode>
+```
+
+**Parameters:**
+
+- `env: Env`
+- `hunt_id: u64`
+- `creator: Address`
+- `allow_partial_scoring: bool`
+
+**Returns:** `Result<(), HuntErrorCode>`
+
+**Error type:** `HuntErrorCode`
+
+**Error codes:**
+
+- `HuntNotFound` = 1
+- `ClueNotFound` = 2
+- `InvalidHuntStatus` = 3
+- `PlayerNotRegistered` = 4
+- `ClueAlreadyCompleted` = 5
+- `InvalidAnswer` = 6
+- `HuntNotActive` = 7
+- `Unauthorized` = 8
+- `InsufficientRewardPool` = 9
+- `DuplicateRegistration` = 10
+- `InvalidTitle` = 11
+- `InvalidDescription` = 12
+- `InvalidAddress` = 13
+- `TooManyClues` = 14
+- `InvalidQuestion` = 15
+- `RefundFailed` = 16
+- `NoCluesAdded` = 17
+- `HuntNotCompleted` = 18
+- `RewardAlreadyClaimed` = 19
+- `RewardDistributionFailed` = 20
+- `NoRewardsConfigured` = 21
+- `DuplicateSubmission` = 22
+- `SubmissionExpired` = 23
+- `BannedPlayer` = 24
+- `NoRequiredClues` = 25
+- `RateLimitExceeded` = 26
+- `ScoreOverflow` = 27
+- `RegistrationsPaused` = 28
+- `AnswersPaused` = 29
+- `RewardsPaused` = 30
+- `HuntEndTimeInPast` = 31
+- `NoPendingAdmin` = 32
+- `PendingAdminMismatch` = 33
+- `InvalidRarity` = 34
+- `InvalidTimeBonusConfig` = 35
+- `AddressBlacklisted` = 36
+- `ContractPaused` = 37
+- `InvalidMaxAttempts` = 38
+- `InvalidWeight` = 39
+- `HintNotAvailable` = 40
+- `HintAlreadyUnlocked` = 41
+- `InsufficientScore` = 42
+- `TooManyCategories` = 43
+- `InvalidCategory` = 44
+- `InvalidDifficulty` = 45
+- `CorruptPlayerProgress` = 46
+- `HuntNotStarted` = 47
+- `AdminAlreadyProposed` = 48
+- `InvalidPoints` = 49
+- `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -813,35 +1129,39 @@ pub fn get_hunt_end_time(env: Env, hunt_id: u64) -> Result<u64, HuntErrorCode>
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
 #### `add_clue`
 
 Adds a clue to a hunt. Only the hunt creator can add clues.
-Answers are hashed with SHA256 before storage; the hash is never exposed.
+Answers are hashed with SHA256 before storage. The ledger is public, so this is not a
+secrecy guarantee; answer verification remains on-chain through plaintext submissions.
 
 # Arguments
-
-- `env` - The Soroban environment
-- `hunt_id` - The hunt to add the clue to
-- `question` - The clue question text (max 2000 chars, non-empty)
-- `answer` - Plain-text answer; normalized (trimmed, lowercased) then hashed
-- `points` - Points awarded for solving this clue
-- `is_required` - Whether this clue must be solved to complete the hunt
+* `env` - The Soroban environment
+* `hunt_id` - The hunt to add the clue to
+* `question` - The clue question text (max 2000 chars, non-empty)
+* `answer` - Plain-text answer; normalized (trimmed, lowercased) then hashed
+* `points` - Points awarded for solving this clue (must be within 1..=10_000)
+* `is_required` - Whether this clue must be solved to complete the hunt
+* `difficulty` - Optional difficulty tier (defaults to 1) used as a multiplier on
+the clue's points. Valid scale is 1..=5, where 1 is easiest and 5 is hardest.
+* `weight` - Optional weight multiplier (defaults to 1)
 
 # Returns
-
 The sequential clue ID assigned within the hunt
 
 # Errors
-
-- `HuntNotFound` - Hunt does not exist
-- `InvalidHuntStatus` - Hunt is not in Draft
-- `Unauthorized` - Caller is not the hunt creator
-- `TooManyClues` - Hunt already has max clues
-- `InvalidQuestion` - Question empty or too long
-- `InvalidAnswer` - Answer empty or too long
+* `HuntNotFound` - Hunt does not exist
+* `InvalidHuntStatus` - Hunt is not in Draft
+* `Unauthorized` - Caller is not the hunt creator
+* `TooManyClues` - Hunt already has max clues
+* `InvalidQuestion` - Question empty or too long
+* `InvalidAnswer` - Answer empty or too long
+* `InvalidPoints` - Points are outside the allowed 1..=10_000 range
+* `InvalidDifficulty` - Difficulty is outside the allowed 1..=5 tier scale
 
 **Signature:**
 
@@ -916,6 +1236,7 @@ pub fn add_clue(env: Env, hunt_id: u64, question: String, answer: String, points
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -994,6 +1315,7 @@ pub fn add_clues(env: Env, hunt_id: u64, clues: Vec<BatchClueInput>) -> Result<V
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -1003,19 +1325,17 @@ Adds alternative acceptable answers to an existing clue (synonyms).
 Only the hunt creator can add aliases, and only while the hunt is in Draft status.
 
 # Arguments
-
-- `env` - The Soroban environment
-- `hunt_id` - The hunt containing the clue
-- `clue_id` - The existing clue to add aliases to
-- `answers` - Alternative answers that should also be accepted
+* `env` - The Soroban environment
+* `hunt_id` - The hunt containing the clue
+* `clue_id` - The existing clue to add aliases to
+* `answers` - Alternative answers that should also be accepted
 
 # Errors
-
-- `HuntNotFound` - Hunt does not exist
-- `InvalidHuntStatus` - Hunt is not in Draft
-- `Unauthorized` - Caller is not the hunt creator
-- `ClueNotFound` - Clue does not exist
-- `InvalidAnswer` - Any answer is empty or exceeds max length
+* `HuntNotFound` - Hunt does not exist
+* `InvalidHuntStatus` - Hunt is not in Draft
+* `Unauthorized` - Caller is not the hunt creator
+* `ClueNotFound` - Clue does not exist
+* `InvalidAnswer` - Any answer is empty or exceeds max length
 
 **Signature:**
 
@@ -1086,6 +1406,7 @@ pub fn add_clue_aliases(env: Env, hunt_id: u64, clue_id: u32, answers: Vec<Strin
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -1161,12 +1482,14 @@ pub fn get_clue(env: Env, hunt_id: u64, clue_id: u32) -> Result<ClueInfo, HuntEr
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
 #### `list_clues`
 
 Returns paginated clues for a hunt. Answer hashes are not exposed.
+A `limit` of `0` defaults to `DEFAULT_PAGE_SIZE`.
 
 **Signature:**
 
@@ -1188,6 +1511,7 @@ pub fn list_clues(env: Env, hunt_id: u64, offset: u32, limit: u32) -> Vec<ClueIn
 #### `list_hunts`
 
 Returns a list of all hunts (paginated).
+A `limit` of `0` defaults to `DEFAULT_PAGE_SIZE`.
 
 **Signature:**
 
@@ -1300,6 +1624,7 @@ pub fn set_hunt_categories(env: Env, hunt_id: u64, caller: Address, categories: 
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -1329,6 +1654,25 @@ pub fn get_hunts_by_category(env: Env, category: String, offset: u32, limit: u32
 
 Sets or clears a manual hunt difficulty override. Without an override,
 the rating is the average clue difficulty.
+
+Only the hunt creator or a co-creator can change the override, and only
+while the hunt is in Draft status.
+
+# Arguments
+* `env` - The Soroban environment
+* `hunt_id` - The hunt to configure
+* `caller` - The creator or co-creator making the change
+* `difficulty_override` - `Some(value)` to set, `None` to clear
+
+# Errors
+* `HuntNotFound` - Hunt does not exist
+* `Unauthorized` - Caller is not the hunt creator or a co-creator
+* `InvalidHuntStatus` - Hunt is not in Draft
+* `InvalidDifficulty` - Override is outside the allowed tier scale
+
+# Events
+* `HuntDifficultyOverrideSet` - Emitted with the hunt id, caller, and
+the new override value
 
 **Signature:**
 
@@ -1399,6 +1743,7 @@ pub fn set_hunt_difficulty_override(env: Env, hunt_id: u64, caller: Address, dif
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -1477,6 +1822,7 @@ pub fn set_clue_hint(env: Env, hunt_id: u64, clue_id: u32, caller: Address, hint
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -1553,6 +1899,7 @@ pub fn request_hint(env: Env, hunt_id: u64, clue_id: u32, player: Address) -> Re
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -1560,6 +1907,7 @@ pub fn request_hint(env: Env, hunt_id: u64, clue_id: u32, player: Address) -> Re
 
 Returns a paginated slice of clues for a hunt. Useful for large hunts to bound gas.
 Page is 0-indexed. Max page_size is capped at MAX_BATCH_SIZE (50).
+A `page_size` of `0` defaults to `DEFAULT_PAGE_SIZE`.
 Estimated gas: O(page_size) ~5_000 gas per clue + 10_000 overhead.
 
 **Signature:**
@@ -1586,13 +1934,14 @@ Uses hunt_id and clue_id as salt to prevent rainbow table precomputation.
 Hashing scheme: SHA256(hunt_id || clue_id || normalized_answer)
 Resolves the XLM amount for the completing player.
 
-If the hunt's rewardManager-configured pool has a non-empty
-`time_based_tiers` list, this returns the tier's `xlm_amount`
+If the hunt's rewardManager-configured pool has a matching
+`rank_based_tiers` entry, that exact completion-rank amount wins.
+Otherwise, a non-empty `time_based_tiers` list selects the first tier
 whose `max_completion_secs >= (completion_at - registration_at)`.
 If the elapsed time exceeds every configured tier, the last
-(slowest) tier's amount is used as a fallback. If the pool has no
-tiers configured (or is unreachable), this falls back to the
-flat `hunt.reward_config.reward_per_winner()` amount.
+(slowest) tier's amount is used as a fallback. If no tier applies (or
+the pool is unreachable), this falls back to the flat
+`hunt.reward_config.reward_per_winner()` amount.
 
 **Signature:**
 
@@ -1662,6 +2011,7 @@ pub fn activate_hunt(env: Env, hunt_id: u64, caller: Address) -> Result<(), Hunt
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -1735,6 +2085,7 @@ pub fn deactivate_hunt(env: Env, hunt_id: u64, caller: Address) -> Result<(), Hu
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -1808,6 +2159,7 @@ pub fn cancel_hunt(env: Env, hunt_id: u64, caller: Address) -> Result<(), HuntEr
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -1817,34 +2169,31 @@ Force-closes (ends early) an in-progress hunt on behalf of its creator.
 
 Unlike [`cancel_hunt`], closing preserves all player scores and any
 rewards already collected: it marks the hunt `Completed` and triggers a
-final reward distribution for every player who has completed the hunt but
-not yet claimed. Players who have not completed the hunt keep their
+final reward distribution for eligible players who have completed the
+hunt but have not yet claimed. Players who have not completed the hunt,
+or whose frozen completion rank is outside `max_winners`, keep their
 progress and are simply not rewarded. Any unspent reward-pool balance is
-left intact (a creator can refund it separately via [`cancel_hunt`] flows
-only while a hunt is still cancellable — see project docs).
+left intact. [`cancel_hunt`] is rejected once any player has completed
+(use this method instead to pay winners).
 
 Only the creator may close a hunt, and only while it is `Active` or
 `Paused`. Closing a `Draft`, `Completed`, `Cancelled`, `EmergencyStopped`,
 or `Archived` hunt is rejected with `InvalidHuntStatus`.
 
 # Arguments
-
-- `env` - The Soroban environment
-- `hunt_id` - The hunt to close
-- `caller` - The creator (must authorize the call via require_auth)
+* `env` - The Soroban environment
+* `hunt_id` - The hunt to close
+* `caller` - The creator (must authorize the call via require_auth)
 
 # Returns
-
 `Ok(())` on success
 
 # Errors
-
-- `HuntNotFound` - Hunt does not exist
-- `Unauthorized` - Caller is not the hunt creator
-- `InvalidHuntStatus` - Hunt is not in an early-closable status
-- `RewardsPaused` - Reward distribution is globally paused
-- `InvalidRarity` - The hunt's configured NFT rarity is out of range
-- `RewardDistributionFailed` - A RewardManager cross-contract call failed
+* `HuntNotFound` - Hunt does not exist
+* `Unauthorized` - Caller is not the hunt creator
+* `InvalidHuntStatus` - Hunt is not in an early-closable status
+* `RewardsPaused` - Reward distribution is globally paused
+Per-player reward failures are recorded in `HuntClosedEvent.unpaid_players`.
 
 **Signature:**
 
@@ -1914,6 +2263,7 @@ pub fn close_hunt(env: Env, hunt_id: u64, caller: Address) -> Result<(), HuntErr
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -1987,6 +2337,7 @@ pub fn archive_hunt(env: Env, hunt_id: u64, caller: Address) -> Result<(), HuntE
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -2007,11 +2358,9 @@ The sweep is **idempotent**: running it twice reports zero the second
 time rather than failing, so an interrupted call is safe to retry.
 
 # Authorization
-
 The hunt creator or the contract admin.
 
 # Returns
-
 A [`GcReport`] describing what was reclaimed.
 
 **Signature:**
@@ -2082,6 +2431,7 @@ pub fn gc_hunt(env: Env, hunt_id: u64, caller: Address) -> Result<GcReport, Hunt
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -2175,6 +2525,87 @@ pub fn get_hunt_info(env: Env, hunt_id: u64) -> Result<Hunt, HuntErrorCode>
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
+
+---
+
+#### `set_reward_config`
+
+Convenience helper used in tests to set reward configuration on a hunt.
+Sets nft_image_uri to a placeholder when nft_enabled is true.
+
+**Signature:**
+
+```rust
+pub fn set_reward_config(env: Env, hunt_id: u64, max_winners: u32, xlm_pool: i128, nft_enabled: bool, nft_contract: Option<Address>) -> Result<(), HuntErrorCode>
+```
+
+**Parameters:**
+
+- `env: Env`
+- `hunt_id: u64`
+- `max_winners: u32`
+- `xlm_pool: i128`
+- `nft_enabled: bool`
+- `nft_contract: Option<Address>`
+
+**Returns:** `Result<(), HuntErrorCode>`
+
+**Error type:** `HuntErrorCode`
+
+**Error codes:**
+
+- `HuntNotFound` = 1
+- `ClueNotFound` = 2
+- `InvalidHuntStatus` = 3
+- `PlayerNotRegistered` = 4
+- `ClueAlreadyCompleted` = 5
+- `InvalidAnswer` = 6
+- `HuntNotActive` = 7
+- `Unauthorized` = 8
+- `InsufficientRewardPool` = 9
+- `DuplicateRegistration` = 10
+- `InvalidTitle` = 11
+- `InvalidDescription` = 12
+- `InvalidAddress` = 13
+- `TooManyClues` = 14
+- `InvalidQuestion` = 15
+- `RefundFailed` = 16
+- `NoCluesAdded` = 17
+- `HuntNotCompleted` = 18
+- `RewardAlreadyClaimed` = 19
+- `RewardDistributionFailed` = 20
+- `NoRewardsConfigured` = 21
+- `DuplicateSubmission` = 22
+- `SubmissionExpired` = 23
+- `BannedPlayer` = 24
+- `NoRequiredClues` = 25
+- `RateLimitExceeded` = 26
+- `ScoreOverflow` = 27
+- `RegistrationsPaused` = 28
+- `AnswersPaused` = 29
+- `RewardsPaused` = 30
+- `HuntEndTimeInPast` = 31
+- `NoPendingAdmin` = 32
+- `PendingAdminMismatch` = 33
+- `InvalidRarity` = 34
+- `InvalidTimeBonusConfig` = 35
+- `AddressBlacklisted` = 36
+- `ContractPaused` = 37
+- `InvalidMaxAttempts` = 38
+- `InvalidWeight` = 39
+- `HintNotAvailable` = 40
+- `HintAlreadyUnlocked` = 41
+- `InsufficientScore` = 42
+- `TooManyCategories` = 43
+- `InvalidCategory` = 44
+- `InvalidDifficulty` = 45
+- `CorruptPlayerProgress` = 46
+- `HuntNotStarted` = 47
+- `AdminAlreadyProposed` = 48
+- `InvalidPoints` = 49
+- `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -2250,6 +2681,7 @@ pub fn set_reward_manager(env: Env, admin: Address, reward_manager: Address) -> 
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -2326,6 +2758,7 @@ pub fn blacklist_creator(env: Env, admin: Address, creator: Address) -> Result<(
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -2402,6 +2835,7 @@ pub fn remove_from_blacklist(env: Env, admin: Address, creator: Address) -> Resu
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -2432,31 +2866,28 @@ This function verifies that the player has completed all required clues,
 then distributes rewards via the RewardManager contract (if configured)
 and updates the player's reward status.
 
-Reward amounts can be either flat (`xlm_pool / max_winners`) or
-time-based (configured via `RewardManager::set_pool_tiers`), in which
-case the amount depends on `completion_at - started_at` for the
-completing player.
+Reward amounts can be flat (`xlm_pool / max_winners`), time-based
+(configured via `RewardManager::set_pool_tiers`), or exact-rank based
+(configured via `RewardManager::set_pool_rank_tiers`). Rank-based
+amounts use the completion rank frozen by HuntyCore.
 
 # Arguments
-
-- `env` - The Soroban environment
-- `hunt_id` - The hunt ID
-- `player` - The player claiming completion/rewards
+* `env` - The Soroban environment
+* `hunt_id` - The hunt ID
+* `player` - The player claiming completion/rewards
 
 # Returns
-
 `Ok(())` on successful reward claim
 
 # Errors
-
-- `HuntNotFound` - Hunt does not exist
-- `InvalidHuntStatus` - Hunt is not Active (e.g. already Completed or Cancelled)
-- `PlayerNotRegistered` - Player is not registered
-- `HuntNotCompleted` - Player hasn't completed all required clues
-- `RewardAlreadyClaimed` - Player already claimed their reward
-- `NoRewardsConfigured` - No rewards set up for this hunt
-- `InsufficientRewardPool` - All reward slots taken
-- `RewardDistributionFailed` - Cross-contract call failed
+* `HuntNotFound` - Hunt does not exist
+* `InvalidHuntStatus` - Hunt is not Active or Paused (e.g. Completed or Cancelled)
+* `PlayerNotRegistered` - Player is not registered
+* `HuntNotCompleted` - Player hasn't completed all required clues
+* `RewardAlreadyClaimed` - Player already claimed their reward
+* `NoRewardsConfigured` - No rewards set up for this hunt
+* `InsufficientRewardPool` - All reward slots taken
+* `RewardDistributionFailed` - Cross-contract call failed
 
 **Signature:**
 
@@ -2526,6 +2957,7 @@ pub fn complete_hunt(env: Env, hunt_id: u64, player: Address) -> Result<(), Hunt
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -2533,8 +2965,9 @@ pub fn complete_hunt(env: Env, hunt_id: u64, player: Address) -> Result<(), Hunt
 
 Distributes the reward for a single completed, unclaimed player.
 
-Resolves the player's XLM amount (flat or tier-based), invokes the
-RewardManager (if configured and there is at least one reward type),
+Resolves the player's XLM amount (flat, time-tier, or exact-rank
+tier-based), invokes the RewardManager (if configured and there is at
+least one reward type),
 marks the player's progress as claimed, increments the hunt's
 `claimed_count` (in memory — the caller is responsible for persisting
 the hunt), and emits a `RewardClaimed` event.
@@ -2543,30 +2976,26 @@ The caller must ensure `progress.is_completed == true` and
 `progress.reward_claimed == false` before invoking this.
 
 # Errors
-
-- `InvalidRarity` - The hunt's configured NFT rarity is out of range
-- `RewardDistributionFailed` - The RewardManager cross-contract call failed
-  Registers a player for an active hunt. The caller must pass their address and authorize;
-  only that identity can register themselves. Initializes player progress and prevents
-  duplicate registrations. Registration is only allowed while the hunt is active and
-  (if set) before end_time.
+* `InvalidRarity` - The hunt's configured NFT rarity is out of range
+* `RewardDistributionFailed` - The RewardManager cross-contract call failed
+Registers a player for an active hunt. The caller must pass their address and authorize;
+only that identity can register themselves. Initializes player progress and prevents
+duplicate registrations. Registration is only allowed while the hunt is active and
+(if set) before end_time.
 
 # Arguments
-
-- `env` - The Soroban environment
-- `hunt_id` - The hunt to register for
-- `player` - The address of the player (must authorize the call via require_auth)
+* `env` - The Soroban environment
+* `hunt_id` - The hunt to register for
+* `player` - The address of the player (must authorize the call via require_auth)
 
 # Returns
-
 `Ok(())` on success
 
 # Errors
-
-- `HuntNotFound` - Hunt does not exist
-- `InvalidHuntStatus` - Hunt is not in Active status
-- `HuntNotActive` - Hunt has ended (past end_time)
-- `DuplicateRegistration` - Player is already registered for this hunt
+* `HuntNotFound` - Hunt does not exist
+* `InvalidHuntStatus` - Hunt is not in Active status
+* `HuntNotActive` - Hunt has ended (past end_time)
+* `DuplicateRegistration` - Player is already registered for this hunt
 
 **Signature:**
 
@@ -2636,6 +3065,7 @@ pub fn register_player(env: Env, hunt_id: u64, player: Address) -> Result<(), Hu
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -2648,21 +3078,19 @@ is stored on-chain. The plain-text code is never persisted or emitted in events.
 Calling this function overwrites any previously set invite code.
 
 # Arguments
-
-- `env` - The Soroban environment
-- `hunt_id` - The hunt to generate an invite code for
-- `creator` - The hunt creator (must authorize the call)
-- `invite_code` - The plain-text invite code to hash and store
+* `env` - The Soroban environment
+* `hunt_id` - The hunt to generate an invite code for
+* `creator` - The hunt creator (must authorize the call)
+* `invite_code` - The plain-text invite code to hash and store
 
 # Returns
-
 `Ok(())` on success
 
 # Errors
-
-- `HuntNotFound` - Hunt does not exist
-- `Unauthorized` - Caller is not the hunt creator
-- `InvalidHuntStatus` - Hunt is not in Draft status
+* `HuntNotFound` - Hunt does not exist
+* `Unauthorized` - Caller is not the hunt creator
+* `InvalidHuntStatus` - Hunt is not in Draft status
+* `InvalidAnswer` - Invite code is empty or exceeds 256 bytes
 
 **Signature:**
 
@@ -2733,6 +3161,7 @@ pub fn generate_invite_code(env: Env, hunt_id: u64, creator: Address, invite_cod
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -2745,21 +3174,18 @@ When making a hunt private, an invite code must already be configured via
 `generate_invite_code` before the hunt can be activated.
 
 # Arguments
-
-- `env` - The Soroban environment
-- `hunt_id` - The hunt to update privacy for
-- `creator` - The hunt creator (must authorize the call)
-- `is_private` - Whether the hunt should be invite-only
+* `env` - The Soroban environment
+* `hunt_id` - The hunt to update privacy for
+* `creator` - The hunt creator (must authorize the call)
+* `is_private` - Whether the hunt should be invite-only
 
 # Returns
-
 `Ok(())` on success
 
 # Errors
-
-- `HuntNotFound` - Hunt does not exist
-- `Unauthorized` - Caller is not the hunt creator
-- `InvalidHuntStatus` - Hunt is not in Draft status
+* `HuntNotFound` - Hunt does not exist
+* `Unauthorized` - Caller is not the hunt creator
+* `InvalidHuntStatus` - Hunt is not in Draft status
 
 **Signature:**
 
@@ -2830,6 +3256,7 @@ pub fn set_hunt_privacy(env: Env, hunt_id: u64, creator: Address, is_private: bo
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -2839,20 +3266,17 @@ Clears the invite code for a private hunt, effectively pausing new registrations
 The hunt creator can generate a new code later via `generate_invite_code`.
 
 # Arguments
-
-- `env` - The Soroban environment
-- `hunt_id` - The hunt to revoke the invite code for
-- `creator` - The hunt creator (must authorize the call)
+* `env` - The Soroban environment
+* `hunt_id` - The hunt to revoke the invite code for
+* `creator` - The hunt creator (must authorize the call)
 
 # Returns
-
 `Ok(())` on success
 
 # Errors
-
-- `HuntNotFound` - Hunt does not exist
-- `Unauthorized` - Caller is not the hunt creator
-- `InvalidHuntStatus` - Hunt is not in Draft status
+* `HuntNotFound` - Hunt does not exist
+* `Unauthorized` - Caller is not the hunt creator
+* `InvalidHuntStatus` - Hunt is not in Draft status
 
 **Signature:**
 
@@ -2922,6 +3346,173 @@ pub fn revoke_invite_code(env: Env, hunt_id: u64, creator: Address) -> Result<()
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
+
+---
+
+#### `ban_player`
+
+Bans a player from participating in a hunt.
+
+# Arguments
+* `env` - The Soroban environment
+* `hunt_id` - The hunt to ban the player from
+* `caller` - The hunt creator or the contract admin
+* `player` - The player to ban
+
+**Signature:**
+
+```rust
+pub fn ban_player(env: Env, hunt_id: u64, caller: Address, player: Address) -> Result<(), HuntErrorCode>
+```
+
+**Parameters:**
+
+- `env: Env`
+- `hunt_id: u64`
+- `caller: Address`
+- `player: Address`
+
+**Returns:** `Result<(), HuntErrorCode>`
+
+**Error type:** `HuntErrorCode`
+
+**Error codes:**
+
+- `HuntNotFound` = 1
+- `ClueNotFound` = 2
+- `InvalidHuntStatus` = 3
+- `PlayerNotRegistered` = 4
+- `ClueAlreadyCompleted` = 5
+- `InvalidAnswer` = 6
+- `HuntNotActive` = 7
+- `Unauthorized` = 8
+- `InsufficientRewardPool` = 9
+- `DuplicateRegistration` = 10
+- `InvalidTitle` = 11
+- `InvalidDescription` = 12
+- `InvalidAddress` = 13
+- `TooManyClues` = 14
+- `InvalidQuestion` = 15
+- `RefundFailed` = 16
+- `NoCluesAdded` = 17
+- `HuntNotCompleted` = 18
+- `RewardAlreadyClaimed` = 19
+- `RewardDistributionFailed` = 20
+- `NoRewardsConfigured` = 21
+- `DuplicateSubmission` = 22
+- `SubmissionExpired` = 23
+- `BannedPlayer` = 24
+- `NoRequiredClues` = 25
+- `RateLimitExceeded` = 26
+- `ScoreOverflow` = 27
+- `RegistrationsPaused` = 28
+- `AnswersPaused` = 29
+- `RewardsPaused` = 30
+- `HuntEndTimeInPast` = 31
+- `NoPendingAdmin` = 32
+- `PendingAdminMismatch` = 33
+- `InvalidRarity` = 34
+- `InvalidTimeBonusConfig` = 35
+- `AddressBlacklisted` = 36
+- `ContractPaused` = 37
+- `InvalidMaxAttempts` = 38
+- `InvalidWeight` = 39
+- `HintNotAvailable` = 40
+- `HintAlreadyUnlocked` = 41
+- `InsufficientScore` = 42
+- `TooManyCategories` = 43
+- `InvalidCategory` = 44
+- `InvalidDifficulty` = 45
+- `CorruptPlayerProgress` = 46
+- `HuntNotStarted` = 47
+- `AdminAlreadyProposed` = 48
+- `InvalidPoints` = 49
+- `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
+
+---
+
+#### `unban_player`
+
+Unbans a player from a hunt.
+
+# Arguments
+* `env` - The Soroban environment
+* `hunt_id` - The hunt to unban the player from
+* `caller` - The hunt creator or the contract admin
+* `player` - The player to unban
+
+**Signature:**
+
+```rust
+pub fn unban_player(env: Env, hunt_id: u64, caller: Address, player: Address) -> Result<(), HuntErrorCode>
+```
+
+**Parameters:**
+
+- `env: Env`
+- `hunt_id: u64`
+- `caller: Address`
+- `player: Address`
+
+**Returns:** `Result<(), HuntErrorCode>`
+
+**Error type:** `HuntErrorCode`
+
+**Error codes:**
+
+- `HuntNotFound` = 1
+- `ClueNotFound` = 2
+- `InvalidHuntStatus` = 3
+- `PlayerNotRegistered` = 4
+- `ClueAlreadyCompleted` = 5
+- `InvalidAnswer` = 6
+- `HuntNotActive` = 7
+- `Unauthorized` = 8
+- `InsufficientRewardPool` = 9
+- `DuplicateRegistration` = 10
+- `InvalidTitle` = 11
+- `InvalidDescription` = 12
+- `InvalidAddress` = 13
+- `TooManyClues` = 14
+- `InvalidQuestion` = 15
+- `RefundFailed` = 16
+- `NoCluesAdded` = 17
+- `HuntNotCompleted` = 18
+- `RewardAlreadyClaimed` = 19
+- `RewardDistributionFailed` = 20
+- `NoRewardsConfigured` = 21
+- `DuplicateSubmission` = 22
+- `SubmissionExpired` = 23
+- `BannedPlayer` = 24
+- `NoRequiredClues` = 25
+- `RateLimitExceeded` = 26
+- `ScoreOverflow` = 27
+- `RegistrationsPaused` = 28
+- `AnswersPaused` = 29
+- `RewardsPaused` = 30
+- `HuntEndTimeInPast` = 31
+- `NoPendingAdmin` = 32
+- `PendingAdminMismatch` = 33
+- `InvalidRarity` = 34
+- `InvalidTimeBonusConfig` = 35
+- `AddressBlacklisted` = 36
+- `ContractPaused` = 37
+- `InvalidMaxAttempts` = 38
+- `InvalidWeight` = 39
+- `HintNotAvailable` = 40
+- `HintAlreadyUnlocked` = 41
+- `InsufficientScore` = 42
+- `TooManyCategories` = 43
+- `InvalidCategory` = 44
+- `InvalidDifficulty` = 45
+- `CorruptPlayerProgress` = 46
+- `HuntNotStarted` = 47
+- `AdminAlreadyProposed` = 48
+- `InvalidPoints` = 49
+- `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -2933,23 +3524,20 @@ The provided invite code is hashed (with hunt_id as salt) and compared against
 the stored `invite_code_hash`. If they match, the player is registered.
 
 # Arguments
-
-- `env` - The Soroban environment
-- `hunt_id` - The private hunt to register for
-- `player` - The address of the player (must authorize the call via require_auth)
-- `invite_code` - The plain-text invite code to validate
+* `env` - The Soroban environment
+* `hunt_id` - The private hunt to register for
+* `player` - The address of the player (must authorize the call via require_auth)
+* `invite_code` - The plain-text invite code to validate
 
 # Returns
-
 `Ok(())` on success
 
 # Errors
-
-- `HuntNotFound` - Hunt does not exist
-- `InvalidHuntStatus` - Hunt is not in Active status, is not private (use
-  `register_player` instead), or has no invite code configured
-- `InvalidAnswer` - The provided invite code is empty or does not match
-- `DuplicateRegistration` - Player is already registered for this hunt
+* `HuntNotFound` - Hunt does not exist
+* `InvalidHuntStatus` - Hunt is not in Active status, is not private (use
+`register_player` instead), or has no invite code configured
+* `InvalidAnswer` - The invite code is empty, exceeds 256 bytes, or does not match
+* `DuplicateRegistration` - Player is already registered for this hunt
 
 **Signature:**
 
@@ -3020,6 +3608,7 @@ pub fn register_with_invite(env: Env, hunt_id: u64, player: Address, invite_code
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -3028,8 +3617,8 @@ pub fn register_with_invite(env: Env, hunt_id: u64, player: Address, invite_code
 Verifies a candidate answer for a registered player with authorization and rate limiting.
 
 Unlike `submit_answer`, `preview_answer` does not mark the clue as completed, award points,
-or emit clue completion events, but requires player authorization and enforces the same
-per-minute rate limits and attempt cooldowns to prevent brute-force dictionary attacks.
+or emit clue completion events. It still requires player authorization and enforces the
+same per-minute rate limit, per-clue attempt cap, and attempt cooldown.
 
 **Signature:**
 
@@ -3101,6 +3690,7 @@ pub fn preview_answer(env: Env, hunt_id: u64, clue_id: u32, player: Address, ans
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -3111,38 +3701,35 @@ with the stored answer hash. If correct, updates player progress and emits
 success events. If incorrect, emits an analytics event and returns an error.
 
 # Arguments
-
-- `env` - The Soroban environment
-- `hunt_id` - The hunt ID
-- `clue_id` - The clue ID to answer
-- `player` - The address of the player submitting the answer
-- `answer` - The plain-text answer submission
-- `submission_nonce` - Caller-chosen unique nonce for this submission envelope
-- `submitted_at` - Client timestamp captured when the submission was signed
+* `env` - The Soroban environment
+* `hunt_id` - The hunt ID
+* `clue_id` - The clue ID to answer
+* `player` - The address of the player submitting the answer
+* `answer` - The plain-text answer submission
+* `submission_nonce` - Caller-chosen unique nonce for this submission envelope
+* `submitted_at` - Client timestamp captured when the submission was signed
 
 # Returns
-
 `Ok(())` on successful answer verification and progress update
 
 # Errors
-
-- `HuntNotFound` - Hunt does not exist
-- `HuntNotActive` - Hunt is not currently active or has ended
-- `PlayerNotRegistered` - Player has not registered for this hunt
-- `ClueNotFound` - Clue does not exist in this hunt
-- `ClueAlreadyCompleted` - Player has already completed this clue
-- `InvalidAnswer` - Submitted answer does not match the stored hash
-- `DuplicateSubmission` - Submission nonce/timestamp envelope was already processed
-- `SubmissionExpired` - Submission timestamp is too old or too far in the future
+* `HuntNotFound` - Hunt does not exist
+* `HuntNotActive` - Hunt is not currently active or has ended
+* `PlayerNotRegistered` - Player has not registered for this hunt
+* `ClueNotFound` - Clue does not exist in this hunt
+* `ClueAlreadyCompleted` - Player has already completed this clue
+* `InvalidAnswer` - Submitted answer does not match the stored hash
+* `InvalidMaxAttempts` - Player has exhausted attempts for this clue
+* `DuplicateSubmission` - Submission nonce/timestamp envelope was already processed
+* `SubmissionExpired` - Submission timestamp is too old or too far in the future
 
 # Events
-
-- `ClueCompleted` - Emitted when answer is correct
-- `HuntCompleted` - Emitted when all required clues are completed
-- `AnswerIncorrect` - Emitted when answer is wrong (for analytics)
-  In team mode, returns true if any teammate has already completed this clue.
-  In team mode, records a clue completion against the player's team so
-  teammates see it as already solved and share the earned score.
+* `ClueCompleted` - Emitted when answer is correct
+* `HuntCompleted` - Emitted when all required clues are completed
+* `AnswerIncorrect` - Emitted when answer is wrong (for analytics)
+In team mode, returns true if any teammate has already completed this clue.
+In team mode, records a clue completion against the player's team so
+teammates see it as already solved and share the earned score.
 
 **Signature:**
 
@@ -3216,15 +3803,11 @@ pub fn submit_answer(env: Env, hunt_id: u64, clue_id: u32, player: Address, answ
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
 #### `submit_answer_with_hash`
-
-Variant of `submit_answer` which accepts a precomputed SHA256 answer hash.
-This avoids on-chain normalization and hashing when the client supplies
-the correctly computed `answer_hash = SHA256(hunt_id || clue_id || normalized_answer)`.
-Use this from off-chain callers that can perform normalization+hashing cheaply.
 
 **Signature:**
 
@@ -3298,6 +3881,7 @@ pub fn submit_answer_with_hash(env: Env, hunt_id: u64, clue_id: u32, player: Add
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -3306,13 +3890,11 @@ pub fn submit_answer_with_hash(env: Env, hunt_id: u64, clue_id: u32, player: Add
 Checks if a player has completed all required clues for a hunt.
 
 # Arguments
-
-- `env` - The Soroban environment
-- `hunt_id` - The hunt ID
-- `progress` - The player's progress data
+* `env` - The Soroban environment
+* `hunt_id` - The hunt ID
+* `progress` - The player's progress data
 
 # Returns
-
 `true` if all required clues are completed, `false` otherwise
 Returns player progress for a hunt (read-only).
 Includes completed clues, score, and completion status.
@@ -3386,6 +3968,7 @@ pub fn get_player_progress(env: Env, hunt_id: u64, player: Address) -> Result<Pl
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -3393,6 +3976,10 @@ pub fn get_player_progress(env: Env, hunt_id: u64, player: Address) -> Result<Pl
 
 Returns the list of clue IDs that the player has completed for a hunt (read-only).
 Useful for UI to show progress. Returns empty vec if player is not registered.
+
+Thin backwards-compatible wrapper: returns at most `MAX_CLUES_PER_HUNT`
+entries, since `add_clue` / `add_clues_batch` bound a hunt's clue set by
+that same constant. Prefer `get_completed_clues_paginated` for new callers.
 
 **Signature:**
 
@@ -3405,6 +3992,31 @@ pub fn get_completed_clues(env: Env, hunt_id: u64, player: Address) -> Vec<u32>
 - `env: Env`
 - `hunt_id: u64`
 - `player: Address`
+
+**Returns:** `Vec<u32>`
+
+---
+
+#### `get_completed_clues_paginated`
+
+Paginated variant of `get_completed_clues` (read-only).
+`offset` is 0-indexed; `limit` is capped at `MAX_BATCH_SIZE`, matching
+`list_clues`. Returns an empty vec if the player is not registered or the
+offset is past the end of the completed set.
+
+**Signature:**
+
+```rust
+pub fn get_completed_clues_paginated(env: Env, hunt_id: u64, player: Address, offset: u32, limit: u32) -> Vec<u32>
+```
+
+**Parameters:**
+
+- `env: Env`
+- `hunt_id: u64`
+- `player: Address`
+- `offset: u32`
+- `limit: u32`
 
 **Returns:** `Vec<u32>`
 
@@ -3433,6 +4045,11 @@ pub fn get_hunt_count(env: Env) -> u64
 Returns ranked players for a hunt with pagination support (read-only).
 Sorted by score descending, then by completion time ascending (earlier = better).
 Limit is capped at 20 to control gas. Returns error if hunt does not exist.
+
+# Arguments
+* `env` - The Soroban environment
+* `hunt_id` - The hunt to query
+* `limit` - Maximum entries to return (capped at `MAX_LEADERBOARD_SIZE`)
 
 **Signature:**
 
@@ -3502,6 +4119,7 @@ pub fn get_hunt_leaderboard(env: Env, hunt_id: u64, limit: u32) -> Result<Leader
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -3511,12 +4129,15 @@ Scans a bounded window of registered players for a hunt and returns
 their compact rows. This method enables clients to page through all
 registered players in multiple calls (bounded by `MAX_LEADERBOARD_SCAN_SIZE`)
 and merge results off-chain to build a full leaderboard without a single
-large on-chain scan.
+large on-chain scan. Only the requested registration slice is read, so
+the cost of a page depends on `window_size`, not on how many players the
+hunt has. This read path is public; the `_caller` argument is
+accepted for forward compatibility and is currently ignored.
 
 **Signature:**
 
 ```rust
-pub fn get_hunt_leaderboard_window(env: Env, hunt_id: u64, start_index: u32, window_size: u32) -> Result<crate::types::LeaderboardWindow, HuntErrorCode>
+pub fn get_hunt_leaderboard_window(env: Env, hunt_id: u64, start_index: u32, window_size: u32, _caller: Option<Address>) -> Result<crate::types::LeaderboardWindow, HuntErrorCode>
 ```
 
 **Parameters:**
@@ -3525,6 +4146,7 @@ pub fn get_hunt_leaderboard_window(env: Env, hunt_id: u64, start_index: u32, win
 - `hunt_id: u64`
 - `start_index: u32`
 - `window_size: u32`
+- `_caller: Option<Address>`
 
 **Returns:** `Result<crate::types::LeaderboardWindow, HuntErrorCode>`
 
@@ -3582,6 +4204,7 @@ pub fn get_hunt_leaderboard_window(env: Env, hunt_id: u64, start_index: u32, win
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -3658,6 +4281,7 @@ pub fn get_hunt_statistics(env: Env, hunt_id: u64) -> Result<HuntStatistics, Hun
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -3732,6 +4356,7 @@ pub fn add_view_only_access(env: Env, hunt_id: u64, creator: Address, viewer: Ad
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -3806,6 +4431,7 @@ pub fn remove_view_only_access(env: Env, hunt_id: u64, creator: Address, viewer:
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -3832,13 +4458,15 @@ pub fn is_view_only(env: Env, hunt_id: u64, address: Address) -> bool
 **Signature:**
 
 ```rust
-pub fn get_view_only_list(env: Env, hunt_id: u64) -> Vec<Address>
+pub fn get_view_only_list(env: Env, hunt_id: u64, offset: u32, limit: u32) -> Vec<Address>
 ```
 
 **Parameters:**
 
 - `env: Env`
 - `hunt_id: u64`
+- `offset: u32`
+- `limit: u32`
 
 **Returns:** `Vec<Address>`
 
@@ -3915,6 +4543,7 @@ pub fn add_co_creator(env: Env, hunt_id: u64, creator: Address, new_co_creator: 
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -3989,6 +4618,7 @@ pub fn remove_co_creator(env: Env, hunt_id: u64, creator: Address, co_creator_to
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -4086,6 +4716,7 @@ pub fn propose_new_admin(env: Env, admin: Address, new_admin: Address) -> Result
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -4164,6 +4795,7 @@ pub fn accept_admin(env: Env, new_admin: Address) -> Result<(), HuntErrorCode>
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -4237,6 +4869,7 @@ pub fn add_global_view_only(env: Env, admin: Address, viewer: Address) -> Result
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -4310,6 +4943,7 @@ pub fn remove_global_view_only(env: Env, admin: Address, viewer: Address) -> Res
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -4335,12 +4969,14 @@ pub fn is_global_view_only(env: Env, address: Address) -> bool
 **Signature:**
 
 ```rust
-pub fn get_global_view_only_list(env: Env) -> Vec<Address>
+pub fn get_global_view_only_list(env: Env, offset: u32, limit: u32) -> Vec<Address>
 ```
 
 **Parameters:**
 
 - `env: Env`
+- `offset: u32`
+- `limit: u32`
 
 **Returns:** `Vec<Address>`
 
@@ -4415,6 +5051,7 @@ pub fn pause_registrations(env: Env, admin: Address) -> Result<(), HuntErrorCode
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -4487,6 +5124,7 @@ pub fn unpause_registrations(env: Env, admin: Address) -> Result<(), HuntErrorCo
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -4559,6 +5197,7 @@ pub fn pause_answers(env: Env, admin: Address) -> Result<(), HuntErrorCode>
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -4631,6 +5270,7 @@ pub fn unpause_answers(env: Env, admin: Address) -> Result<(), HuntErrorCode>
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -4703,6 +5343,7 @@ pub fn pause_rewards(env: Env, admin: Address) -> Result<(), HuntErrorCode>
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -4775,6 +5416,7 @@ pub fn unpause_rewards(env: Env, admin: Address) -> Result<(), HuntErrorCode>
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ---
 
@@ -4815,13 +5457,12 @@ pub fn get_schema_version(env: Env) -> u32
 **Signature:**
 
 ```rust
-pub fn initialize_schema(env: Env, admin: Address) -> ()
+pub fn initialize_schema(env: Env) -> ()
 ```
 
 **Parameters:**
 
 - `env: Env`
-- `admin: Address`
 
 **Returns:** `()`
 
@@ -4883,19 +5524,296 @@ pub fn rollback_migration(env: Env, admin: Address) -> Result<migration::Migrati
 
 ---
 
-#### `get_health_dashboard`
+#### `get_active_alerts`
 
 **Signature:**
 
 ```rust
-pub fn get_health_dashboard(env: Env) -> monitoring::ContractHealth
+pub fn get_active_alerts(env: Env) -> Vec<hunty_common::monitoring::HealthAlert>
 ```
 
 **Parameters:**
 
 - `env: Env`
 
-**Returns:** `monitoring::ContractHealth`
+**Returns:** `Vec<hunty_common::monitoring::HealthAlert>`
+
+---
+
+#### `get_health_dashboard`
+
+**Signature:**
+
+```rust
+pub fn get_health_dashboard(env: Env) -> hunty_common::monitoring::ContractHealth
+```
+
+**Parameters:**
+
+- `env: Env`
+
+**Returns:** `hunty_common::monitoring::ContractHealth`
+
+---
+
+#### `set_rate_limit_admin`
+
+Bootstrap or transfer the rate-limit admin role.
+
+The first call sets the admin with no prior-admin check. Subsequent
+calls require `caller` to already be the stored admin.
+
+**Signature:**
+
+```rust
+pub fn set_rate_limit_admin(env: Env, caller: Address, new_admin: Address) -> Result<(), HuntErrorCode>
+```
+
+**Parameters:**
+
+- `env: Env`
+- `caller: Address`
+- `new_admin: Address`
+
+**Returns:** `Result<(), HuntErrorCode>`
+
+**Error type:** `HuntErrorCode`
+
+**Error codes:**
+
+- `HuntNotFound` = 1
+- `ClueNotFound` = 2
+- `InvalidHuntStatus` = 3
+- `PlayerNotRegistered` = 4
+- `ClueAlreadyCompleted` = 5
+- `InvalidAnswer` = 6
+- `HuntNotActive` = 7
+- `Unauthorized` = 8
+- `InsufficientRewardPool` = 9
+- `DuplicateRegistration` = 10
+- `InvalidTitle` = 11
+- `InvalidDescription` = 12
+- `InvalidAddress` = 13
+- `TooManyClues` = 14
+- `InvalidQuestion` = 15
+- `RefundFailed` = 16
+- `NoCluesAdded` = 17
+- `HuntNotCompleted` = 18
+- `RewardAlreadyClaimed` = 19
+- `RewardDistributionFailed` = 20
+- `NoRewardsConfigured` = 21
+- `DuplicateSubmission` = 22
+- `SubmissionExpired` = 23
+- `BannedPlayer` = 24
+- `NoRequiredClues` = 25
+- `RateLimitExceeded` = 26
+- `ScoreOverflow` = 27
+- `RegistrationsPaused` = 28
+- `AnswersPaused` = 29
+- `RewardsPaused` = 30
+- `HuntEndTimeInPast` = 31
+- `NoPendingAdmin` = 32
+- `PendingAdminMismatch` = 33
+- `InvalidRarity` = 34
+- `InvalidTimeBonusConfig` = 35
+- `AddressBlacklisted` = 36
+- `ContractPaused` = 37
+- `InvalidMaxAttempts` = 38
+- `InvalidWeight` = 39
+- `HintNotAvailable` = 40
+- `HintAlreadyUnlocked` = 41
+- `InsufficientScore` = 42
+- `TooManyCategories` = 43
+- `InvalidCategory` = 44
+- `InvalidDifficulty` = 45
+- `CorruptPlayerProgress` = 46
+- `HuntNotStarted` = 47
+- `AdminAlreadyProposed` = 48
+- `InvalidPoints` = 49
+- `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
+
+---
+
+#### `set_creator_hunt_limit`
+
+Admin-only: override the daily hunt-creation limit for a specific creator.
+
+Pass `limit = 0` to remove an existing override, falling back to the
+contract-wide default.
+
+**Signature:**
+
+```rust
+pub fn set_creator_hunt_limit(env: Env, caller: Address, creator: Address, limit: u32) -> Result<(), HuntErrorCode>
+```
+
+**Parameters:**
+
+- `env: Env`
+- `caller: Address`
+- `creator: Address`
+- `limit: u32`
+
+**Returns:** `Result<(), HuntErrorCode>`
+
+**Error type:** `HuntErrorCode`
+
+**Error codes:**
+
+- `HuntNotFound` = 1
+- `ClueNotFound` = 2
+- `InvalidHuntStatus` = 3
+- `PlayerNotRegistered` = 4
+- `ClueAlreadyCompleted` = 5
+- `InvalidAnswer` = 6
+- `HuntNotActive` = 7
+- `Unauthorized` = 8
+- `InsufficientRewardPool` = 9
+- `DuplicateRegistration` = 10
+- `InvalidTitle` = 11
+- `InvalidDescription` = 12
+- `InvalidAddress` = 13
+- `TooManyClues` = 14
+- `InvalidQuestion` = 15
+- `RefundFailed` = 16
+- `NoCluesAdded` = 17
+- `HuntNotCompleted` = 18
+- `RewardAlreadyClaimed` = 19
+- `RewardDistributionFailed` = 20
+- `NoRewardsConfigured` = 21
+- `DuplicateSubmission` = 22
+- `SubmissionExpired` = 23
+- `BannedPlayer` = 24
+- `NoRequiredClues` = 25
+- `RateLimitExceeded` = 26
+- `ScoreOverflow` = 27
+- `RegistrationsPaused` = 28
+- `AnswersPaused` = 29
+- `RewardsPaused` = 30
+- `HuntEndTimeInPast` = 31
+- `NoPendingAdmin` = 32
+- `PendingAdminMismatch` = 33
+- `InvalidRarity` = 34
+- `InvalidTimeBonusConfig` = 35
+- `AddressBlacklisted` = 36
+- `ContractPaused` = 37
+- `InvalidMaxAttempts` = 38
+- `InvalidWeight` = 39
+- `HintNotAvailable` = 40
+- `HintAlreadyUnlocked` = 41
+- `InsufficientScore` = 42
+- `TooManyCategories` = 43
+- `InvalidCategory` = 44
+- `InvalidDifficulty` = 45
+- `CorruptPlayerProgress` = 46
+- `HuntNotStarted` = 47
+- `AdminAlreadyProposed` = 48
+- `InvalidPoints` = 49
+- `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
+
+---
+
+#### `set_default_hunt_creation_limit`
+
+Admin-only: update the contract-wide default daily hunt-creation limit.
+
+This is the fallback used for any creator that has no per-creator
+override. The initial value is [`rate_limit::DEFAULT_HUNT_CREATION_LIMIT`].
+
+**Signature:**
+
+```rust
+pub fn set_default_hunt_creation_limit(env: Env, caller: Address, limit: u32) -> Result<(), HuntErrorCode>
+```
+
+**Parameters:**
+
+- `env: Env`
+- `caller: Address`
+- `limit: u32`
+
+**Returns:** `Result<(), HuntErrorCode>`
+
+**Error type:** `HuntErrorCode`
+
+**Error codes:**
+
+- `HuntNotFound` = 1
+- `ClueNotFound` = 2
+- `InvalidHuntStatus` = 3
+- `PlayerNotRegistered` = 4
+- `ClueAlreadyCompleted` = 5
+- `InvalidAnswer` = 6
+- `HuntNotActive` = 7
+- `Unauthorized` = 8
+- `InsufficientRewardPool` = 9
+- `DuplicateRegistration` = 10
+- `InvalidTitle` = 11
+- `InvalidDescription` = 12
+- `InvalidAddress` = 13
+- `TooManyClues` = 14
+- `InvalidQuestion` = 15
+- `RefundFailed` = 16
+- `NoCluesAdded` = 17
+- `HuntNotCompleted` = 18
+- `RewardAlreadyClaimed` = 19
+- `RewardDistributionFailed` = 20
+- `NoRewardsConfigured` = 21
+- `DuplicateSubmission` = 22
+- `SubmissionExpired` = 23
+- `BannedPlayer` = 24
+- `NoRequiredClues` = 25
+- `RateLimitExceeded` = 26
+- `ScoreOverflow` = 27
+- `RegistrationsPaused` = 28
+- `AnswersPaused` = 29
+- `RewardsPaused` = 30
+- `HuntEndTimeInPast` = 31
+- `NoPendingAdmin` = 32
+- `PendingAdminMismatch` = 33
+- `InvalidRarity` = 34
+- `InvalidTimeBonusConfig` = 35
+- `AddressBlacklisted` = 36
+- `ContractPaused` = 37
+- `InvalidMaxAttempts` = 38
+- `InvalidWeight` = 39
+- `HintNotAvailable` = 40
+- `HintAlreadyUnlocked` = 41
+- `InsufficientScore` = 42
+- `TooManyCategories` = 43
+- `InvalidCategory` = 44
+- `InvalidDifficulty` = 45
+- `CorruptPlayerProgress` = 46
+- `HuntNotStarted` = 47
+- `AdminAlreadyProposed` = 48
+- `InvalidPoints` = 49
+- `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
+
+---
+
+#### `get_creator_rate_limit_status`
+
+Query the current quota status for a creator.
+
+Returns how many hunts the creator has created today, their effective
+daily limit, and the cooldown seconds until the next day begins (0 when
+the limit has not been reached).
+
+**Signature:**
+
+```rust
+pub fn get_creator_rate_limit_status(env: Env, creator: Address) -> crate::types::RateLimitStatus
+```
+
+**Parameters:**
+
+- `env: Env`
+- `creator: Address`
+
+**Returns:** `crate::types::RateLimitStatus`
 
 ---
 
@@ -4909,24 +5827,21 @@ _No contract API functions found._
 
 #### `initialize`
 
-Initializes the NFT reward contract with an admin, minter, and optional max supply cap.
-Passing `Some(0)` as `max_supply` is rejected with `InvalidMaxSupply`; use `None` for unlimited minting.
-
 **Signature:**
 
 ```rust
-pub fn initialize(env: Env, admin: Address, minter: Address, max_supply: Option<u64>, collection_metadata: CollectionMetadata) -> Result<(), crate::errors::NftErrorCode>
+pub fn initialize(_env: Env, _admin: Address, _minter: Address, _max_supply: Option<u64>, _metadata: CollectionMetadata) -> Result<(), NftErrorCode>
 ```
 
 **Parameters:**
 
-- `env: Env`
-- `admin: Address`
-- `minter: Address`
-- `max_supply: Option<u64>`
-- `collection_metadata: CollectionMetadata`
+- `_env: Env`
+- `_admin: Address`
+- `_minter: Address`
+- `_max_supply: Option<u64>`
+- `_metadata: CollectionMetadata`
 
-**Returns:** `Result<(), crate::errors::NftErrorCode>`
+**Returns:** `Result<(), NftErrorCode>`
 
 **Error type:** `NftErrorCode`
 
@@ -4951,170 +5866,25 @@ pub fn initialize(env: Env, admin: Address, minter: Address, max_supply: Option<
 - `InvalidExtensionValue` = 17
 - `ExtensionNotFound` = 18
 - `InvalidMaxSupply` = 19
+- `InvalidRoyalty` = 20
+- `InvalidImageUri` = 21
 
 ---
 
-#### `mint_reward_nft`
-
-Mints a unique NFT as a reward for hunt completion.
-
-`minter` must be an authorized minter (and must sign the transaction) when the
-contract has been initialized. Before initialization the check is skipped so
-that existing deployments remain functional.
-
-# Arguments
-
-- `minter` - Address performing the mint (must be whitelisted after init)
-- `hunt_id` - The hunt this NFT commemorates
-- `player_address` - The address of the player completing the hunt (initial owner)
-- `metadata` - NFT metadata (title, description, image URI, hunt_title, rarity, tier)
-
-# Returns
-
-The unique NFT ID of the minted NFT
+#### `initialize_admin`
 
 **Signature:**
 
 ```rust
-pub fn mint_reward_nft(env: Env, minter: Address, hunt_id: u64, player_address: Address, metadata: NftMetadata) -> u64
+pub fn initialize_admin(_env: Env, _admin: Address) -> Result<(), NftErrorCode>
 ```
 
 **Parameters:**
 
-- `env: Env`
-- `minter: Address`
-- `hunt_id: u64`
-- `player_address: Address`
-- `metadata: NftMetadata`
+- `_env: Env`
+- `_admin: Address`
 
-**Returns:** `u64`
-
----
-
-#### `mint_reward_nft_from_map`
-
-Mints a reward NFT from a generic metadata map. This is the entrypoint
-used by cross-contract callers (e.g. RewardManager) that cannot depend
-on this crate's `NftMetadata` type directly.
-
-`minter` is the calling contract's address and must be whitelisted when the
-contract has been initialized.
-
-Expected keys in `metadata` (all optional, with sensible defaults):
-
-- "title": String
-- "description": String
-- "image_uri": String
-- "hunt_title": String (defaults to title when omitted/empty)
-- "rarity": u32
-- "tier": u32
-- "creator": Address (defaults to player_address if omitted)
-- "royalty_bps": u32 (optional, basis points for royalty percentage)
-- "transferable": bool
-- "extensions": Map<String, String> (optional, arbitrary key-value metadata)
-
-**Signature:**
-
-```rust
-pub fn mint_reward_nft_from_map(env: Env, minter: Address, hunt_id: u64, player_address: Address, metadata: Map<Symbol, Val>) -> u64
-```
-
-**Parameters:**
-
-- `env: Env`
-- `minter: Address`
-- `hunt_id: u64`
-- `player_address: Address`
-- `metadata: Map<Symbol, Val>`
-
-**Returns:** `u64`
-
----
-
-#### `get_nft`
-
-Retrieves NFT data by ID.
-
-**Signature:**
-
-```rust
-pub fn get_nft(env: Env, nft_id: u64) -> Option<NftData>
-```
-
-**Parameters:**
-
-- `env: Env`
-- `nft_id: u64`
-
-**Returns:** `Option<NftData>`
-
----
-
-#### `get_collection_metadata`
-
-Returns the collection-level metadata configured at initialization.
-
-**Signature:**
-
-```rust
-pub fn get_collection_metadata(env: Env) -> Option<CollectionMetadata>
-```
-
-**Parameters:**
-
-- `env: Env`
-
-**Returns:** `Option<CollectionMetadata>`
-
----
-
-#### `get_nft_metadata`
-
-Returns complete metadata for an NFT, including hunt info and completion details.
-
-**Signature:**
-
-```rust
-pub fn get_nft_metadata(env: Env, nft_id: u64) -> Option<NftMetadataResponse>
-```
-
-**Parameters:**
-
-- `env: Env`
-- `nft_id: u64`
-
-**Returns:** `Option<NftMetadataResponse>`
-
----
-
-#### `set_nft_extension`
-
-Sets an extension field on an NFT. Only the NFT owner can call this.
-Max 10 extension fields per NFT. If the key already exists, it is updated.
-If the maximum is reached and the key is new, it returns an error.
-
-# Arguments
-
-- `nft_id` - The NFT to extend
-- `owner` - The current owner (must authorize)
-- `key` - The extension key (max 64 bytes)
-- `value` - The extension value (max 512 bytes)
-
-**Signature:**
-
-```rust
-pub fn set_nft_extension(env: Env, nft_id: u64, owner: Address, key: String, value: String) -> Result<(), crate::errors::NftErrorCode>
-```
-
-**Parameters:**
-
-- `env: Env`
-- `nft_id: u64`
-- `owner: Address`
-- `key: String`
-- `value: String`
-
-**Returns:** `Result<(), crate::errors::NftErrorCode>`
+**Returns:** `Result<(), NftErrorCode>`
 
 **Error type:** `NftErrorCode`
 
@@ -5139,151 +5909,26 @@ pub fn set_nft_extension(env: Env, nft_id: u64, owner: Address, key: String, val
 - `InvalidExtensionValue` = 17
 - `ExtensionNotFound` = 18
 - `InvalidMaxSupply` = 19
-
----
-
-#### `get_nft_extension`
-
-Gets the value of a specific extension field for an NFT.
-
-# Arguments
-
-- `nft_id` - The NFT to query
-- `key` - The extension key to look up
-
-# Returns
-
-The extension value if found, None otherwise.
-
-**Signature:**
-
-```rust
-pub fn get_nft_extension(env: Env, nft_id: u64, key: String) -> Option<String>
-```
-
-**Parameters:**
-
-- `env: Env`
-- `nft_id: u64`
-- `key: String`
-
-**Returns:** `Option<String>`
-
----
-
-#### `get_nft_extensions`
-
-Gets all extension fields for an NFT.
-
-# Arguments
-
-- `nft_id` - The NFT to query
-
-# Returns
-
-Map of all extension key-value pairs.
-
-**Signature:**
-
-```rust
-pub fn get_nft_extensions(env: Env, nft_id: u64) -> Option<Map<String, String>>
-```
-
-**Parameters:**
-
-- `env: Env`
-- `nft_id: u64`
-
-**Returns:** `Option<Map<String, String>>`
-
----
-
-#### `remove_nft_extension`
-
-Removes an extension field from an NFT. Only the NFT owner can call this.
-
-# Arguments
-
-- `nft_id` - The NFT to modify
-- `owner` - The current owner (must authorize)
-- `key` - The extension key to remove
-
-**Signature:**
-
-```rust
-pub fn remove_nft_extension(env: Env, nft_id: u64, owner: Address, key: String) -> Result<(), crate::errors::NftErrorCode>
-```
-
-**Parameters:**
-
-- `env: Env`
-- `nft_id: u64`
-- `owner: Address`
-- `key: String`
-
-**Returns:** `Result<(), crate::errors::NftErrorCode>`
-
-**Error type:** `NftErrorCode`
-
-**Error codes:**
-
-- `NftNotFound` = 1
-- `Unauthorized` = 2
-- `NotOwner` = 3
-- `InvalidRecipient` = 4
-- `SoulboundNft` = 5
-- `InvalidRarity` = 6
-- `AlreadyInitialized` = 7
-- `MaxSupplyReached` = 8
-- `NotInitialized` = 9
-- `NotOperator` = 10
-- `NftNotTransferable` = 11
-- `NftLocked` = 12
-- `InvalidMetadata` = 13
-- `MetadataFrozen` = 14
-- `TooManyExtensions` = 15
-- `InvalidExtensionKey` = 16
-- `InvalidExtensionValue` = 17
-- `ExtensionNotFound` = 18
-- `InvalidMaxSupply` = 19
-
----
-
-#### `get_admin`
-
-Returns the configured admin address, if set.
-
-**Signature:**
-
-```rust
-pub fn get_admin(env: Env) -> Option<Address>
-```
-
-**Parameters:**
-
-- `env: Env`
-
-**Returns:** `Option<Address>`
+- `InvalidRoyalty` = 20
+- `InvalidImageUri` = 21
 
 ---
 
 #### `set_reward_manager`
 
-Sets the RewardManager contract address. Only the admin can call this.
-
 **Signature:**
 
 ```rust
-pub fn set_reward_manager(env: Env, admin: Address, reward_manager: Address) -> Result<(), crate::errors::NftErrorCode>
+pub fn set_reward_manager(_env: Env, _admin: Address, _reward_manager: Address) -> Result<(), NftErrorCode>
 ```
 
 **Parameters:**
 
-- `env: Env`
-- `admin: Address`
-- `reward_manager: Address`
+- `_env: Env`
+- `_admin: Address`
+- `_reward_manager: Address`
 
-**Returns:** `Result<(), crate::errors::NftErrorCode>`
+**Returns:** `Result<(), NftErrorCode>`
 
 **Error type:** `NftErrorCode`
 
@@ -5308,290 +5953,61 @@ pub fn set_reward_manager(env: Env, admin: Address, reward_manager: Address) -> 
 - `InvalidExtensionValue` = 17
 - `ExtensionNotFound` = 18
 - `InvalidMaxSupply` = 19
+- `InvalidRoyalty` = 20
+- `InvalidImageUri` = 21
 
 ---
 
-#### `add_authorized_contract`
-
-Adds a contract to the authorized callers list. Only the admin can call this.
+#### `get_total_supply`
 
 **Signature:**
 
 ```rust
-pub fn add_authorized_contract(env: Env, admin: Address, contract: Address) -> Result<(), crate::errors::NftErrorCode>
+pub fn get_total_supply(_env: Env) -> u64
 ```
 
 **Parameters:**
 
-- `env: Env`
-- `admin: Address`
-- `contract: Address`
-
-**Returns:** `Result<(), crate::errors::NftErrorCode>`
-
-**Error type:** `NftErrorCode`
-
-**Error codes:**
-
-- `NftNotFound` = 1
-- `Unauthorized` = 2
-- `NotOwner` = 3
-- `InvalidRecipient` = 4
-- `SoulboundNft` = 5
-- `InvalidRarity` = 6
-- `AlreadyInitialized` = 7
-- `MaxSupplyReached` = 8
-- `NotInitialized` = 9
-- `NotOperator` = 10
-- `NftNotTransferable` = 11
-- `NftLocked` = 12
-- `InvalidMetadata` = 13
-- `MetadataFrozen` = 14
-- `TooManyExtensions` = 15
-- `InvalidExtensionKey` = 16
-- `InvalidExtensionValue` = 17
-- `ExtensionNotFound` = 18
-- `InvalidMaxSupply` = 19
-
----
-
-#### `remove_authorized_contract`
-
-Removes a contract from the authorized callers list. Only the admin can call this.
-
-**Signature:**
-
-```rust
-pub fn remove_authorized_contract(env: Env, admin: Address, contract: Address) -> Result<(), crate::errors::NftErrorCode>
-```
-
-**Parameters:**
-
-- `env: Env`
-- `admin: Address`
-- `contract: Address`
-
-**Returns:** `Result<(), crate::errors::NftErrorCode>`
-
-**Error type:** `NftErrorCode`
-
-**Error codes:**
-
-- `NftNotFound` = 1
-- `Unauthorized` = 2
-- `NotOwner` = 3
-- `InvalidRecipient` = 4
-- `SoulboundNft` = 5
-- `InvalidRarity` = 6
-- `AlreadyInitialized` = 7
-- `MaxSupplyReached` = 8
-- `NotInitialized` = 9
-- `NotOperator` = 10
-- `NftNotTransferable` = 11
-- `NftLocked` = 12
-- `InvalidMetadata` = 13
-- `MetadataFrozen` = 14
-- `TooManyExtensions` = 15
-- `InvalidExtensionKey` = 16
-- `InvalidExtensionValue` = 17
-- `ExtensionNotFound` = 18
-- `InvalidMaxSupply` = 19
-
----
-
-#### `admin_update_image_uris`
-
-Batch-updates image URIs for all NFTs whose `image_uri` starts with `old_prefix`,
-replacing it with `new_prefix`. Useful for migrating between IPFS gateways or CDNs.
-
-Paginated like every other collection scan in this contract
-(`list_all_nfts`, `get_player_nfts`, `get_nfts_by_hunt`): a single call
-only ever touches up to `MAX_SCAN_LIMIT` NFTs starting at `offset`, so
-it can't exceed the invocation resource budget regardless of
-collection size. Drive a full migration by repeatedly calling this
-with `offset` set to the previous call's `next_offset` until
-`next_offset` stops advancing (or equals the collection size).
-
-The operation is idempotent: re-running a batch over an
-already-migrated range updates nothing (those URIs already start with
-`new_prefix`, not `old_prefix`), so a retried or overlapping batch is
-harmless.
-
-# Authorization
-
-Only the configured admin can call this function.
-
-# Arguments
-
-- `admin` - The admin address (must match the stored admin)
-- `old_prefix` - The prefix to match (e.g. "ipfs://oldgateway/")
-- `new_prefix` - The replacement prefix (e.g. "ipfs://newgateway/")
-- `offset` - The starting index for this batch (0-based)
-- `limit` - The maximum number of NFTs to scan in this batch (capped at MAX_SCAN_LIMIT)
-
-# Returns
-
-`(updated_count, next_offset)` — how many image URIs were updated in
-this batch, and the offset to resume from for the next one.
-
-**Signature:**
-
-```rust
-pub fn admin_update_image_uris(env: Env, admin: Address, old_prefix: String, new_prefix: String, offset: u32, limit: u32) -> Result<(u32, u32), crate::errors::NftErrorCode>
-```
-
-**Parameters:**
-
-- `env: Env`
-- `admin: Address`
-- `old_prefix: String`
-- `new_prefix: String`
-- `offset: u32`
-- `limit: u32`
-
-**Returns:** `Result<(u32, u32), crate::errors::NftErrorCode>`
-
-**Error type:** `NftErrorCode`
-
-**Error codes:**
-
-- `NftNotFound` = 1
-- `Unauthorized` = 2
-- `NotOwner` = 3
-- `InvalidRecipient` = 4
-- `SoulboundNft` = 5
-- `InvalidRarity` = 6
-- `AlreadyInitialized` = 7
-- `MaxSupplyReached` = 8
-- `NotInitialized` = 9
-- `NotOperator` = 10
-- `NftNotTransferable` = 11
-- `NftLocked` = 12
-- `InvalidMetadata` = 13
-- `MetadataFrozen` = 14
-- `TooManyExtensions` = 15
-- `InvalidExtensionKey` = 16
-- `InvalidExtensionValue` = 17
-- `ExtensionNotFound` = 18
-- `InvalidMaxSupply` = 19
-
----
-
-#### `update_nft_metadata`
-
-Updates mutable metadata fields (description, image_uri). Owner only.
-Title, hunt info, and attributes remain immutable for collectibility.
-
-**Signature:**
-
-```rust
-pub fn update_nft_metadata(env: Env, nft_id: u64, updater: Address, new_description: String, new_image_uri: String) -> Result<(), crate::errors::NftErrorCode>
-```
-
-**Parameters:**
-
-- `env: Env`
-- `nft_id: u64`
-- `updater: Address`
-- `new_description: String`
-- `new_image_uri: String`
-
-**Returns:** `Result<(), crate::errors::NftErrorCode>`
-
-**Error type:** `NftErrorCode`
-
-**Error codes:**
-
-- `NftNotFound` = 1
-- `Unauthorized` = 2
-- `NotOwner` = 3
-- `InvalidRecipient` = 4
-- `SoulboundNft` = 5
-- `InvalidRarity` = 6
-- `AlreadyInitialized` = 7
-- `MaxSupplyReached` = 8
-- `NotInitialized` = 9
-- `NotOperator` = 10
-- `NftNotTransferable` = 11
-- `NftLocked` = 12
-- `InvalidMetadata` = 13
-- `MetadataFrozen` = 14
-- `TooManyExtensions` = 15
-- `InvalidExtensionKey` = 16
-- `InvalidExtensionValue` = 17
-- `ExtensionNotFound` = 18
-- `InvalidMaxSupply` = 19
-
----
-
-#### `total_supply`
-
-Returns the total number of NFTs minted so far.
-
-**Signature:**
-
-```rust
-pub fn total_supply(env: Env) -> u64
-```
-
-**Parameters:**
-
-- `env: Env`
+- `_env: Env`
 
 **Returns:** `u64`
 
 ---
 
-#### `get_max_supply`
-
-Returns the configured maximum total supply of NFTs.
-
-- `None` → no cap was set (unlimited minting)
-- `Some(0)` → unlimited (explicit zero treated as unlimited)
-- `Some(n)` → at most `n` NFTs may ever be minted
+#### `get_nft_metadata`
 
 **Signature:**
 
 ```rust
-pub fn get_max_supply(env: Env) -> Option<u64>
+pub fn get_nft_metadata(_env: Env, _nft_id: u64) -> Option<NftMetadata>
 ```
 
 **Parameters:**
 
-- `env: Env`
+- `_env: Env`
+- `_nft_id: u64`
 
-**Returns:** `Option<u64>`
+**Returns:** `Option<NftMetadata>`
 
 ---
 
-#### `set_max_supply`
-
-Updates the maximum total supply cap. Admin only.
-
-- Pass `None` to remove the cap (unlimited).
-- Pass `Some(n)` where `n > 0` and `n >= current total_supply` to set or raise the cap.
-  Attempting to set a cap of `0` or lower than the already-minted count is
-  rejected with `InvalidMaxSupply`.
-
-# Errors
-
-- `NotInitialized` - Contract has not been initialized yet
-- `Unauthorized` - Caller is not the admin
-- `InvalidMaxSupply` - `new_max` is `Some(0)` or less than the current minted supply
+#### `mint_reward_nft`
 
 **Signature:**
 
 ```rust
-pub fn set_max_supply(env: Env, admin: Address, new_max: Option<u64>) -> Result<(), crate::errors::NftErrorCode>
+pub fn mint_reward_nft(_env: Env, _minter: Address, _hunt_id: u64, _owner: Address, metadata: NftMetadata) -> Result<u64, NftErrorCode>
 ```
 
 **Parameters:**
 
-- `env: Env`
-- `admin: Address`
-- `new_max: Option<u64>`
+- `_env: Env`
+- `_minter: Address`
+- `_hunt_id: u64`
+- `_owner: Address`
+- `metadata: NftMetadata`
 
-**Returns:** `Result<(), crate::errors::NftErrorCode>`
+**Returns:** `Result<u64, NftErrorCode>`
 
 **Error type:** `NftErrorCode`
 
@@ -5616,135 +6032,28 @@ pub fn set_max_supply(env: Env, admin: Address, new_max: Option<u64>) -> Result<
 - `InvalidExtensionValue` = 17
 - `ExtensionNotFound` = 18
 - `InvalidMaxSupply` = 19
+- `InvalidRoyalty` = 20
+- `InvalidImageUri` = 21
 
 ---
 
-#### `get_remaining_supply`
-
-Returns the number of NFTs that can still be minted.
-
-- `None` → unlimited (no cap configured)
-- `Some(n)` → exactly `n` more NFTs may be minted before the cap is hit
-
-Once the cap is reached this returns `Some(0)`, and any subsequent mint
-will panic with `MaxSupplyReached`.
+#### `mint_reward_nft_from_map`
 
 **Signature:**
 
 ```rust
-pub fn get_remaining_supply(env: Env) -> Option<u64>
+pub fn mint_reward_nft_from_map(_env: Env, _minter: Address, _hunt_id: u64, _owner: Address, values: Map<Symbol, soroban_sdk::Val>) -> Result<u64, NftErrorCode>
 ```
 
 **Parameters:**
 
-- `env: Env`
+- `_env: Env`
+- `_minter: Address`
+- `_hunt_id: u64`
+- `_owner: Address`
+- `values: Map<Symbol, soroban_sdk::Val>`
 
-**Returns:** `Option<u64>`
-
----
-
-#### `list_all_nfts`
-
-Lists all NFTs minted by the contract with pagination support.
-
-Returns a vector of NftData structs, paginated by offset and limit.
-The limit is bounded to MAX_SCAN_LIMIT (1000) to prevent excessive gas consumption.
-
-# Arguments
-
-- `env` - The Soroban environment
-- `offset` - The starting index for pagination (0-based)
-- `limit` - The maximum number of NFTs to return (capped at MAX_SCAN_LIMIT)
-
-# Returns
-
-Vec<NftData> - A vector of NFT data structures, bounded by limit or remaining NFTs
-
-**Signature:**
-
-```rust
-pub fn list_all_nfts(env: Env, offset: u32, limit: u32) -> Vec<NftData>
-```
-
-**Parameters:**
-
-- `env: Env`
-- `offset: u32`
-- `limit: u32`
-
-**Returns:** `Vec<NftData>`
-
----
-
-#### `search_nfts_by_metadata`
-
-Searches NFTs by metadata fields with pagination support.
-
-Allows filtering NFTs by various metadata fields. All filter parameters are optional -
-only provided filters are applied. Returns matching NFTs with pagination.
-
-# Arguments
-
-- `env` - The Soroban environment
-- `offset` - The starting index for pagination (0-based)
-- `limit` - The maximum number of NFTs to return (capped at MAX_SCAN_LIMIT)
-- `title_filter` - Optional filter for NFT title (exact match)
-- `hunt_title_filter` - Optional filter for hunt title (exact match)
-- `rarity_filter` - Optional filter for rarity tier (0-5)
-- `tier_filter` - Optional filter for custom tier
-- `creator_filter` - Optional filter for creator address
-- `hunt_id_filter` - Optional filter for hunt ID
-- `extension_key` - Optional extension key to search for
-- `extension_value` - Optional extension value to match (requires extension_key)
-
-# Returns
-
-Vec<NftData> - A vector of matching NFT data structures, paginated by offset and limit
-
-**Signature:**
-
-```rust
-pub fn search_nfts_by_metadata(env: Env, offset: u32, limit: u32, title_filter: Option<String>, hunt_title_filter: Option<String>, rarity_filter: Option<u32>, tier_filter: Option<u32>, creator_filter: Option<Address>, hunt_id_filter: Option<u64>, extension_key: Option<String>, extension_value: Option<String>) -> Vec<NftData>
-```
-
-**Parameters:**
-
-- `env: Env`
-- `offset: u32`
-- `limit: u32`
-- `title_filter: Option<String>`
-- `hunt_title_filter: Option<String>`
-- `rarity_filter: Option<u32>`
-- `tier_filter: Option<u32>`
-- `creator_filter: Option<Address>`
-- `hunt_id_filter: Option<u64>`
-- `extension_key: Option<String>`
-- `extension_value: Option<String>`
-
-**Returns:** `Vec<NftData>`
-
----
-
-#### `transfer_nft`
-
-Transfers an NFT to a new owner when the NFT is transferable.
-Non-transferable (soulbound) NFTs remain bound to the minting recipient.
-
-**Signature:**
-
-```rust
-pub fn transfer_nft(env: Env, nft_id: u64, from_address: Address, to_address: Address, caller: Address) -> Result<(), crate::errors::NftErrorCode>
-```
-
-**Parameters:**
-
-- `env: Env`
-- `nft_id: u64`
-- `from_address: Address`
-- `to_address: Address`
-- `caller: Address`
-
-**Returns:** `Result<(), crate::errors::NftErrorCode>`
+**Returns:** `Result<u64, NftErrorCode>`
 
 **Error type:** `NftErrorCode`
 
@@ -5769,252 +6078,44 @@ pub fn transfer_nft(env: Env, nft_id: u64, from_address: Address, to_address: Ad
 - `InvalidExtensionValue` = 17
 - `ExtensionNotFound` = 18
 - `InvalidMaxSupply` = 19
-
----
-
-#### `owner_of`
-
-Returns the owner of an NFT.
-
-**Signature:**
-
-```rust
-pub fn owner_of(env: Env, nft_id: u64) -> Option<Address>
-```
-
-**Parameters:**
-
-- `env: Env`
-- `nft_id: u64`
-
-**Returns:** `Option<Address>`
-
----
-
-#### `verify_ownership`
-
-Verifies whether `address` is the current owner of `nft_id`.
-Returns `true` when the NFT exists and the stored owner equals `address`.
-
-**Signature:**
-
-```rust
-pub fn verify_ownership(env: Env, address: Address, nft_id: u64) -> bool
-```
-
-**Parameters:**
-
-- `env: Env`
-- `address: Address`
-- `nft_id: u64`
-
-**Returns:** `bool`
-
----
-
-#### `has_hunt_nft`
-
-Returns `true` if `address` owns any NFT minted for `hunt_id`.
-Performs an O(1) indexed lookup via the stored (owner, hunt_id) count mapping.
-
-**Signature:**
-
-```rust
-pub fn has_hunt_nft(env: Env, address: Address, hunt_id: u64) -> bool
-```
-
-**Parameters:**
-
-- `env: Env`
-- `address: Address`
-- `hunt_id: u64`
-
-**Returns:** `bool`
+- `InvalidRoyalty` = 20
+- `InvalidImageUri` = 21
 
 ---
 
 #### `get_player_nfts`
 
-Returns paginated NFT IDs owned by an address.
-The limit is bounded to MAX_SCAN_LIMIT (1000) to prevent excessive gas consumption.
-
 **Signature:**
 
 ```rust
-pub fn get_player_nfts(env: Env, owner: Address, offset: u32, limit: u32) -> Vec<u64>
+pub fn get_player_nfts(_env: Env, _player: Address, _offset: u32, _limit: u32) -> Vec<u64>
 ```
 
 **Parameters:**
 
-- `env: Env`
-- `owner: Address`
-- `offset: u32`
-- `limit: u32`
+- `_env: Env`
+- `_player: Address`
+- `_offset: u32`
+- `_limit: u32`
 
 **Returns:** `Vec<u64>`
 
 ---
 
-#### `get_nfts_by_hunt`
-
-Returns paginated NFT IDs minted for a hunt.
-The limit is bounded to MAX_SCAN_LIMIT (1000) to prevent excessive gas consumption.
+#### `get_nft`
 
 **Signature:**
 
 ```rust
-pub fn get_nfts_by_hunt(env: Env, hunt_id: u64, offset: u32, limit: u32) -> Vec<u64>
+pub fn get_nft(_env: Env, _nft_id: u64) -> Option<Nft>
 ```
 
 **Parameters:**
 
-- `env: Env`
-- `hunt_id: u64`
-- `offset: u32`
-- `limit: u32`
+- `_env: Env`
+- `_nft_id: u64`
 
-**Returns:** `Vec<u64>`
-
----
-
-#### `get_hunt_nft_count`
-
-Returns the total number of NFTs minted for a hunt.
-
-**Signature:**
-
-```rust
-pub fn get_hunt_nft_count(env: Env, hunt_id: u64) -> u32
-```
-
-**Parameters:**
-
-- `env: Env`
-- `hunt_id: u64`
-
-**Returns:** `u32`
-
----
-
-#### `set_operator`
-
-Grants `operator` the ability to manage all NFTs owned by `owner`.
-
-# Authorization
-
-`owner` must authorize this call.
-
-**Signature:**
-
-```rust
-pub fn set_operator(env: Env, owner: Address, operator: Address) -> ()
-```
-
-**Parameters:**
-
-- `env: Env`
-- `owner: Address`
-- `operator: Address`
-
-**Returns:** `()`
-
----
-
-#### `remove_operator`
-
-Revokes operator approval for `operator` over `owner`'s NFTs.
-
-# Authorization
-
-`owner` must authorize this call.
-
-**Signature:**
-
-```rust
-pub fn remove_operator(env: Env, owner: Address, operator: Address) -> ()
-```
-
-**Parameters:**
-
-- `env: Env`
-- `owner: Address`
-- `operator: Address`
-
-**Returns:** `()`
-
----
-
-#### `is_operator`
-
-Returns true if `operator` is approved to manage all NFTs of `owner`.
-
-**Signature:**
-
-```rust
-pub fn is_operator(env: Env, owner: Address, operator: Address) -> bool
-```
-
-**Parameters:**
-
-- `env: Env`
-- `owner: Address`
-- `operator: Address`
-
-**Returns:** `bool`
-
----
-
-#### `burn_nft`
-
-Burns (permanently destroys) an NFT, removing it from storage and the owner's list.
-
-# Authorization
-
-The `owner` must authorize this call and be the current owner of the NFT.
-
-# Errors
-
-Returns `NftNotFound` if the NFT does not exist.
-Returns `NotOwner` if the caller is not the current owner.
-Returns `NftLocked` if the NFT is locked (e.g., staked elsewhere).
-
-**Signature:**
-
-```rust
-pub fn burn_nft(env: Env, nft_id: u64, owner: Address) -> Result<(), crate::errors::NftErrorCode>
-```
-
-**Parameters:**
-
-- `env: Env`
-- `nft_id: u64`
-- `owner: Address`
-
-**Returns:** `Result<(), crate::errors::NftErrorCode>`
-
-**Error type:** `NftErrorCode`
-
-**Error codes:**
-
-- `NftNotFound` = 1
-- `Unauthorized` = 2
-- `NotOwner` = 3
-- `InvalidRecipient` = 4
-- `SoulboundNft` = 5
-- `InvalidRarity` = 6
-- `AlreadyInitialized` = 7
-- `MaxSupplyReached` = 8
-- `NotInitialized` = 9
-- `NotOperator` = 10
-- `NftNotTransferable` = 11
-- `NftLocked` = 12
-- `InvalidMetadata` = 13
-- `MetadataFrozen` = 14
-- `TooManyExtensions` = 15
-- `InvalidExtensionKey` = 16
-- `InvalidExtensionValue` = 17
-- `ExtensionNotFound` = 18
-- `InvalidMaxSupply` = 19
+**Returns:** `Option<Nft>`
 
 ---
 
@@ -6024,10 +6125,90 @@ _No contract API functions found._
 
 ## `reward-manager` Contract
 
+### `ReentrantFundingToken`
+
+#### `configure`
+
+Arms this token to attempt one reentrant `fund_reward_pool` call, with
+the same arguments, the next time its `transfer` is invoked.
+
+**Signature:**
+
+```rust
+pub fn configure(env: Env, target: Address, funder: Address, hunt_id: u64, amount: i128) -> ()
+```
+
+**Parameters:**
+
+- `env: Env`
+- `target: Address`
+- `funder: Address`
+- `hunt_id: u64`
+- `amount: i128`
+
+**Returns:** `()`
+
+---
+
+#### `reentry_was_rejected`
+
+Whether the reentrant call attempted during `transfer` was rejected.
+
+**Signature:**
+
+```rust
+pub fn reentry_was_rejected(env: Env) -> bool
+```
+
+**Parameters:**
+
+- `env: Env`
+
+**Returns:** `bool`
+
+---
+
+#### `balance`
+
+**Signature:**
+
+```rust
+pub fn balance(_env: Env, _id: Address) -> i128
+```
+
+**Parameters:**
+
+- `_env: Env`
+- `_id: Address`
+
+**Returns:** `i128`
+
+---
+
+#### `transfer`
+
+**Signature:**
+
+```rust
+pub fn transfer(env: Env, _from: Address, _to: Address, _amount: i128) -> ()
+```
+
+**Parameters:**
+
+- `env: Env`
+- `_from: Address`
+- `_to: Address`
+- `_amount: i128`
+
+**Returns:** `()`
+
+---
+
 ### `RewardManager`
 
 #### `initialize`
 
+Returns true when HuntyCore reports the hunt as terminal (cancelled or completed).
 Current semantic version of this contract.
 Minimum NftReward version this contract requires.
 Initializes the RewardManager with the XLM token contract address (SAC).
@@ -6052,30 +6233,46 @@ pub fn initialize(env: Env, admin: Address, xlm_token: Address, hunty_core: Addr
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6101,30 +6298,46 @@ pub fn propose_new_admin(env: Env, admin: Address, new_admin: Address) -> Result
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6149,30 +6362,46 @@ pub fn accept_admin(env: Env, new_admin: Address) -> Result<(), RewardErrorCode>
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6200,30 +6429,46 @@ pub fn set_nft_reward_contract(env: Env, admin: Address, nft_contract: Address) 
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6251,30 +6496,46 @@ pub fn set_hunty_core(env: Env, admin: Address, hunty_core: Address) -> Result<(
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6282,8 +6543,6 @@ pub fn set_hunty_core(env: Env, admin: Address, hunty_core: Address) -> Result<(
 
 Adds a contract to the authorized callers list for `distribute_rewards`.
 Only the contract admin can call this.
-
-The distribution gate is fail-closed: `distribute_rewards` reads the immediate invoker via `env.invoker()`, requires that address to authenticate, and then checks whether the address is present in the allowlist. If no contracts are allowlisted, or the invoker is not in the allowlist, the call returns `Unauthorized`.
 
 **Signature:**
 
@@ -6303,30 +6562,46 @@ pub fn add_authorized_contract(env: Env, admin: Address, contract: Address) -> R
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6353,30 +6628,46 @@ pub fn remove_authorized_contract(env: Env, admin: Address, contract: Address) -
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6392,23 +6683,21 @@ For NFT-only pools (pools that distribute only NFTs without any token component)
 set `min_distribution_amount` to 0 and provide an `nft_contract` address.
 
 # Arguments
-
-- `creator` - The hunt creator who will own and fund the pool
-- `hunt_id` - The hunt this pool is for
-- `token_address` - Address of the SAC-compatible token contract (e.g., XLM, USDC)
-- `min_distribution_amount` - Minimum token amount per distribution (0 for NFT-only pools)
-- `nft_contract` - Optional NFT contract address for NFT rewards
-- `nft_royalty_bps` - Creator royalty basis points (0-10000) for secondary market sales
-- `nft_transferable` - Whether reward NFTs from this pool are transferable
+* `creator` - The hunt creator who will own and fund the pool
+* `hunt_id` - The hunt this pool is for
+* `token_address` - Address of the SAC-compatible token contract (e.g., XLM, USDC)
+* `min_distribution_amount` - Minimum token amount per distribution (0 for NFT-only pools)
+* `nft_contract` - Optional NFT contract address for NFT rewards
+* `nft_royalty_bps` - Creator royalty basis points (0-10000) for secondary market sales
+* `nft_transferable` - Whether reward NFTs from this pool are transferable
 
 # Errors
-
-- `PoolAlreadyExists` - A pool already exists for this hunt_id
-- `InvalidAmount` - min_distribution_amount is negative
-- `InvalidTokenContract` - token_address is not a valid SAC-compatible token
-- `InvalidConfig` - min_distribution_amount is 0 but no NFT contract provided
-- `NotInitialized` - hunty_core has not been configured (set during initialize)
-- `HuntNotFound` - hunt_id does not exist in HuntyCore
+* `PoolAlreadyExists` - A pool already exists for this hunt_id
+* `InvalidAmount` - min_distribution_amount is negative
+* `InvalidTokenContract` - token_address is not a valid SAC-compatible token
+* `InvalidConfig` - min_distribution_amount is 0 but no NFT contract provided
+* `NotInitialized` - hunty_core has not been configured (set during initialize)
+* `HuntNotFound` - hunt_id does not exist in HuntyCore
 
 **Signature:**
 
@@ -6433,30 +6722,46 @@ pub fn create_reward_pool_with_nft(env: Env, creator: Address, hunt_id: u64, tok
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6469,21 +6774,19 @@ after creation (see `fund_reward_pool`); the token contract must be
 SAC-compatible.
 
 # Arguments
-
-- `creator` - The hunt creator who will own and fund the pool
-- `hunt_id` - The hunt this pool is for
-- `token_address` - Address of the SAC-compatible token contract (e.g., XLM, USDC)
-- `min_distribution_amount` - Minimum token amount per distribution (0 = no minimum)
-- `nft_royalty_bps` - Creator royalty basis points (0-10000) for secondary market sales
-- `nft_transferable` - Whether reward NFTs from this pool are transferable
+* `creator` - The hunt creator who will own and fund the pool
+* `hunt_id` - The hunt this pool is for
+* `token_address` - Address of the SAC-compatible token contract (e.g., XLM, USDC)
+* `min_distribution_amount` - Minimum token amount per distribution (0 = no minimum)
+* `nft_royalty_bps` - Creator royalty basis points (0-10000) for secondary market sales
+* `nft_transferable` - Whether reward NFTs from this pool are transferable
 
 # Errors
-
-- `PoolAlreadyExists` - A pool already exists for this hunt_id
-- `InvalidAmount` - min_distribution_amount is negative
-- `InvalidTokenContract` - token_address is not a valid SAC-compatible token
-- `NotInitialized` - hunty_core has not been configured (set during initialize)
-- `HuntNotFound` - hunt_id does not exist in HuntyCore
+* `PoolAlreadyExists` - A pool already exists for this hunt_id
+* `InvalidAmount` - min_distribution_amount is negative
+* `InvalidTokenContract` - token_address is not a valid SAC-compatible token
+* `NotInitialized` - hunty_core has not been configured (set during initialize)
+* `HuntNotFound` - hunt_id does not exist in HuntyCore
 
 **Signature:**
 
@@ -6507,30 +6810,46 @@ pub fn create_reward_pool(env: Env, creator: Address, hunt_id: u64, token_addres
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6543,16 +6862,14 @@ has underfunded the pool and needs to lower the minimum so distributions
 can proceed.
 
 # Arguments
-
-- `creator` - The pool creator (must match the stored creator)
-- `hunt_id` - The hunt whose pool config to update
-- `min_distribution_amount` - New minimum XLM per distribution (0 = no minimum)
+* `creator` - The pool creator (must match the stored creator)
+* `hunt_id` - The hunt whose pool config to update
+* `min_distribution_amount` - New minimum XLM per distribution (0 = no minimum)
 
 # Errors
-
-- `PoolNotFound` - No pool exists for this hunt_id
-- `Unauthorized` - Caller is not the pool creator
-- `InvalidAmount` - min_distribution_amount is negative
+* `PoolNotFound` - No pool exists for this hunt_id
+* `Unauthorized` - Caller is not the pool creator
+* `InvalidAmount` - min_distribution_amount is negative
 
 **Signature:**
 
@@ -6573,30 +6890,46 @@ pub fn update_pool_config(env: Env, creator: Address, hunt_id: u64, min_distribu
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6624,30 +6957,46 @@ pub fn set_pool_target_amount(env: Env, creator: Address, hunt_id: u64, target_a
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6674,30 +7023,46 @@ pub fn set_min_distribution_interval(env: Env, creator: Address, hunt_id: u64, m
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6724,30 +7089,46 @@ pub fn set_distribution_mode(env: Env, creator: Address, hunt_id: u64, mode: Dis
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6767,18 +7148,17 @@ persisted immediately and become effective for any subsequent distribution
 call. Already-distributed rewards are not affected.
 
 # Arguments
-
-- `creator` - The pool creator (must match the stored creator)
-- `hunt_id` - The hunt whose pool config to update
-- `time_based_tiers` - New tier list (strictly ascending by time, all amounts > 0;
-  an empty list disables tier-based rewards)
+* `creator` - The pool creator (must match the stored creator)
+* `hunt_id` - The hunt whose pool config to update
+* `time_based_tiers` - New tier list (strictly ascending by time, all amounts > 0;
+an empty list disables tier-based rewards)
 
 # Errors
-
-- `PoolNotFound` - No pool exists for this hunt_id
-- `Unauthorized` - Caller is not the pool creator
-- `InvalidConfig` - Tier list (when non-empty) contains a zero/negative
-  amount or is not strictly ascending
+* `PoolNotFound` - No pool exists for this hunt_id
+* `Unauthorized` - Caller is not the pool creator
+* `InvalidConfig` - Tier list is longer than [`MAX_TIER_ENTRIES`], or
+(when non-empty) contains a zero/negative amount or is not strictly
+ascending
 
 **Signature:**
 
@@ -6799,30 +7179,127 @@ pub fn set_pool_tiers(env: Env, creator: Address, hunt_id: u64, time_based_tiers
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
+
+---
+
+#### `set_pool_rank_tiers`
+
+Updates (or installs) exact completion-rank reward tiers on an existing pool.
+
+Ranks are one-based and the list must contain strictly increasing ranks
+with strictly positive amounts. A matching rank is selected using the
+immutable completion rank supplied by HuntyCore; ranks not present in
+the list retain the existing flat/time-based behavior. Passing an empty
+list disables rank-based rewards.
+
+Only the pool creator may change this configuration. Changes affect
+subsequent distributions and never rewrite an already-recorded payout.
+
+# Errors
+* `PoolNotFound` - No pool exists for this hunt_id
+* `Unauthorized` - Caller is not the pool creator
+* `InvalidConfig` - Tier list is longer than [`MAX_TIER_ENTRIES`], or
+(when non-empty) is not strictly ascending with positive amounts
+
+**Signature:**
+
+```rust
+pub fn set_pool_rank_tiers(env: Env, creator: Address, hunt_id: u64, rank_based_tiers: Vec<RankRewardTier>) -> Result<(), RewardErrorCode>
+```
+
+**Parameters:**
+
+- `env: Env`
+- `creator: Address`
+- `hunt_id: u64`
+- `rank_based_tiers: Vec<RankRewardTier>`
+
+**Returns:** `Result<(), RewardErrorCode>`
+
+**Error type:** `RewardErrorCode`
+
+**Error codes:**
+
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6832,15 +7309,13 @@ Sets or updates the NFT contract address for an existing reward pool.
 This allows pools to distribute NFTs alongside or instead of tokens.
 
 # Arguments
-
-- `creator` - The pool creator (must match the stored creator)
-- `hunt_id` - The hunt whose pool config to update
-- `nft_contract` - NFT contract address (or None to disable NFT rewards)
+* `creator` - The pool creator (must match the stored creator)
+* `hunt_id` - The hunt whose pool config to update
+* `nft_contract` - NFT contract address (or None to disable NFT rewards)
 
 # Errors
-
-- `PoolNotFound` - No pool exists for this hunt_id
-- `Unauthorized` - Caller is not the pool creator
+* `PoolNotFound` - No pool exists for this hunt_id
+* `Unauthorized` - Caller is not the pool creator
 
 **Signature:**
 
@@ -6861,30 +7336,46 @@ pub fn set_pool_nft_contract(env: Env, creator: Address, hunt_id: u64, nft_contr
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6912,30 +7403,46 @@ pub fn add_delegate(env: Env, creator: Address, hunt_id: u64, delegate: Address)
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -6963,40 +7470,56 @@ pub fn remove_delegate(env: Env, creator: Address, hunt_id: u64, delegate: Addre
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
 #### `get_pool_config`
 
-Returns the full configuration of a reward pool, including its tier list.
-`None` when no pool has been created for the given `hunt_id`.
+Returns the full configuration of a reward pool, including its time
+and exact-rank tier lists. `None` when no pool exists for the hunt.
 
-This is the primary read path used by HuntyCore at completion time to
-resolve which tier (if any) applies to a player's completion time.
+This is the read path used by HuntyCore at completion time to resolve
+rank- and time-based amounts without duplicating pool state.
 
 **Signature:**
 
@@ -7015,6 +7538,9 @@ pub fn get_pool_config(env: Env, hunt_id: u64) -> Option<RewardPoolConfig>
 
 #### `fund_reward_pool`
 
+Appends a pool-config change to the pool audit log. Shared by every
+creator-only setter so each one leaves the same kind of trail as
+create/fund/freeze/withdraw do.
 Records `amount` as a contribution from `funder` toward `hunt_id`'s
 pool sponsorship ledger, adding them to the pool's funder list the
 first time they contribute. Shared by `fund_reward_pool` and
@@ -7041,7 +7567,6 @@ Transfers tokens from the funder to this contract and records the balance.
 Uses the token address specified when the pool was created.
 
 # Validation
-
 - Minimum funding: 1 XLM equivalent (10,000,000 base units) to prevent dust attacks
 - Maximum single funding: 1 billion tokens to prevent overflow
 - Pool balance limit: 1 billion tokens total to prevent overflow
@@ -7049,20 +7574,18 @@ Uses the token address specified when the pool was created.
 - At most `MAX_FUNDERS_PER_POOL` distinct funders are tracked per pool
 
 # Arguments
-
-- `funder` - The address funding the pool (must authorize this call)
-- `hunt_id` - The hunt to fund
-- `amount` - Token amount to add to the pool (must be > 0)
+* `funder` - The address funding the pool (must authorize this call)
+* `hunt_id` - The hunt to fund
+* `amount` - Token amount to add to the pool (must be > 0)
 
 # Errors
-
-- `PoolNotFound` - Pool has not been created yet
-- `InvalidAmount` - Amount is <= 0
-- `BelowMinimumFunding` - Amount is less than minimum (dust attack prevention)
-- `ExceedsMaximumFunding` - Amount exceeds maximum limit
-- `PoolBalanceOverflow` - Adding this amount would exceed pool balance limit
-- `TooManyFunders` - This would be a new funder and the pool already
-  tracks the maximum number of distinct funders
+* `PoolNotFound` - Pool has not been created yet
+* `InvalidAmount` - Amount is <= 0
+* `BelowMinimumFunding` - Amount is less than minimum (dust attack prevention)
+* `ExceedsMaximumFunding` - Amount exceeds maximum limit
+* `PoolBalanceOverflow` - Adding this amount would exceed pool balance limit
+* `TooManyFunders` - This would be a new funder and the pool already
+tracks the maximum number of distinct funders
 
 **Signature:**
 
@@ -7083,30 +7606,46 @@ pub fn fund_reward_pool(env: Env, funder: Address, hunt_id: u64, amount: i128) -
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -7130,9 +7669,7 @@ before calling this function, as any remaining unclaimed rewards cannot be distr
 after the pool is refunded.
 
 # Accounting
-
 This function updates:
-
 - Pool balance: Set to 0
 - Total refunded: Incremented by the refund amount
 - Audit log: Entry recorded with PoolOperation::Refund
@@ -7141,21 +7678,18 @@ After a refund, the accounting identity is:
 `total_deposited == balance + total_distributed + total_refunded`
 
 # Events
-
 Emits one `PoolRefundedEvent` per funder paid out (a single event for
 the common single-funder case).
 
 # Arguments
-
-- `creator` - The pool creator (must authorize this call)
-- `hunt_id` - The hunt whose pool is being refunded
+* `creator` - The pool creator (must authorize this call)
+* `hunt_id` - The hunt whose pool is being refunded
 
 # Errors
-
-- `PoolNotFound` - Pool has not been created yet
-- `InvalidHuntStatus` - The hunt is not cancelled or ended (only when
-  `set_hunty_core` has been called)
-- `Unauthorized` - Caller is not the pool creator
+* `PoolNotFound` - Pool has not been created yet
+* `InvalidHuntStatus` - The hunt is not cancelled or ended (only when
+`set_hunty_core` has been called)
+* `Unauthorized` - Caller is not the pool creator
 
 **Signature:**
 
@@ -7175,30 +7709,46 @@ pub fn refund_pool(env: Env, creator: Address, hunt_id: u64) -> Result<(), Rewar
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -7212,36 +7762,32 @@ hunt without withdrawing and re-depositing. The XLM never leaves this
 contract; only the internal per-hunt balance accounting is re-keyed.
 
 # Eligibility (acceptance criteria)
-
-- The source pool's hunt must be **expired or cancelled** — verified via
-  a cross-contract call to the configured HuntyCore contract
-  (`is_hunt_expired_or_cancelled`). If HuntyCore is not configured, the
-  source cannot be shown eligible and migration is rejected.
-- The **destination pool must already exist** (created via
-  `create_reward_pool`).
-- **Both pools must have the same creator**, who must authorize the call.
+* The source pool's hunt must be **expired or cancelled** — verified via
+a cross-contract call to the configured HuntyCore contract
+(`is_hunt_expired_or_cancelled`). If HuntyCore is not configured, the
+source cannot be shown eligible and migration is rejected.
+* The **destination pool must already exist** (created via
+`create_reward_pool`).
+* **Both pools must have the same creator**, who must authorize the call.
 
 # Arguments
-
-- `creator` - The shared creator of both pools (must authorize the call)
-- `source_hunt_id` - The expired/cancelled hunt to drain
-- `dest_hunt_id` - The destination hunt to credit
+* `creator` - The shared creator of both pools (must authorize the call)
+* `source_hunt_id` - The expired/cancelled hunt to drain
+* `dest_hunt_id` - The destination hunt to credit
 
 # Returns
-
 The amount of XLM migrated from the source pool to the destination pool.
 
 # Errors
-
-- `InvalidMigration` - source and destination are the same hunt, or the
-  source pool has no balance to migrate
-- `PoolNotFound` - the source pool does not exist
-- `DestinationPoolNotFound` - the destination pool does not exist
-- `Unauthorized` - the caller does not own both pools
-- `SourcePoolNotEligible` - the source hunt is neither expired nor cancelled
-- `PoolBalanceOverflow` - crediting the destination would overflow the pool cap
-- `TooManyFunders` - the destination already tracks the maximum number of
-  distinct funders and the creator is not already one of them
+* `InvalidMigration` - source and destination are the same hunt, or the
+source pool has no balance to migrate
+* `PoolNotFound` - the source pool does not exist
+* `DestinationPoolNotFound` - the destination pool does not exist
+* `Unauthorized` - the caller does not own both pools
+* `SourcePoolNotEligible` - the source hunt is neither expired nor cancelled
+* `PoolBalanceOverflow` - crediting the destination would overflow the pool cap
+* `TooManyFunders` - the destination already tracks the maximum number of
+distinct funders and the creator is not already one of them
 
 **Signature:**
 
@@ -7262,30 +7808,46 @@ pub fn migrate_pool(env: Env, creator: Address, source_hunt_id: u64, dest_hunt_i
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -7380,9 +7942,10 @@ pub fn get_pool_statistics(env: Env, hunt_id: u64) -> Option<RewardPoolStatistic
 Validates whether a pool can cover a given distribution amount.
 
 Checks that:
-
 - The pool exists (was created via create_reward_pool)
-- The required_amount is positive
+- The required_amount is positive, except that `required_amount == 0` is
+valid for pools with an NFT contract (NFT-only pools), which hold no
+token balance by design (#1088)
 - The pool balance >= required_amount
 - The required_amount meets the pool's minimum distribution threshold (if set)
 
@@ -7410,17 +7973,18 @@ pub fn validate_pool(env: Env, hunt_id: u64, required_amount: i128) -> Validatio
 Freezes a reward pool, preventing any further distributions.
 
 Can be called by either the pool creator or the contract admin.
+Records who issued the freeze in `RewardPoolConfig::frozen_by`; an
+admin-issued freeze can only be lifted by the admin (see
+`unfreeze_pool`, #1077).
 Emits a `PoolFrozenEvent`.
 
 # Arguments
-
-- `caller` - The address calling freeze (must be pool creator or admin)
-- `hunt_id` - The hunt whose pool to freeze
+* `caller` - The address calling freeze (must be pool creator or admin)
+* `hunt_id` - The hunt whose pool to freeze
 
 # Errors
-
-- `PoolNotFound` - No pool exists for this hunt_id
-- `Unauthorized` - Caller is neither the pool creator nor the contract admin
+* `PoolNotFound` - No pool exists for this hunt_id
+* `Unauthorized` - Caller is neither the pool creator nor the contract admin
 
 **Signature:**
 
@@ -7440,30 +8004,46 @@ pub fn freeze_pool(env: Env, caller: Address, hunt_id: u64) -> Result<(), Reward
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -7471,18 +8051,22 @@ pub fn freeze_pool(env: Env, caller: Address, hunt_id: u64) -> Result<(), Reward
 
 Unfreezes a reward pool, re-enabling distributions.
 
-Can be called by either the pool creator or the contract admin.
+Can be called by either the pool creator or the contract admin, except
+that a freeze issued by the admin may only be lifted by the admin
+(#1077). Any freezer other than the pool creator was the admin at the
+time of the freeze, so this restriction also survives an admin rotation.
+Clears `RewardPoolConfig::frozen_by`.
 Emits a `PoolUnfrozenEvent`.
 
 # Arguments
-
-- `caller` - The address calling unfreeze (must be pool creator or admin)
-- `hunt_id` - The hunt whose pool to unfreeze
+* `caller` - The address calling unfreeze (must be pool creator or admin)
+* `hunt_id` - The hunt whose pool to unfreeze
 
 # Errors
-
-- `PoolNotFound` - No pool exists for this hunt_id
-- `Unauthorized` - Caller is neither the pool creator nor the contract admin
+* `PoolNotFound` - No pool exists for this hunt_id
+* `Unauthorized` - Caller is neither the pool creator nor the contract
+admin, or the current freeze was issued by the admin and the caller is
+not the admin
 
 **Signature:**
 
@@ -7502,30 +8086,46 @@ pub fn unfreeze_pool(env: Env, caller: Address, hunt_id: u64) -> Result<(), Rewa
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -7558,18 +8158,19 @@ a pool in a single day (24-hour rolling window). This is a live operational cont
 and should be validated to prevent silent misconfiguration.
 
 # Arguments
-
-- `admin` - The contract admin address (must match the stored admin)
-- `hunt_id` - The hunt whose pool cap to set
-- `cap` - The maximum amount to distribute per day. Must be positive (> 0).
-  A cap of 0 means no distributions are allowed (use to disable).
+* `admin` - The contract admin address (must match the stored admin)
+* `hunt_id` - The hunt whose pool cap to set
+* `cap` - The maximum amount to distribute per day. Must be non-negative.
+A cap of 0 **disables all distributions** from this pool (the
+distribution path rejects every attempt with `DailyCapExceeded`).
+Use `freeze_pool` for a semantically richer freeze. A positive
+value sets a rolling 24-hour distribution limit.
 
 # Errors
-
-- `NotInitialized` - Contract has not been initialized (no admin set)
-- `Unauthorized` - Caller is not the contract admin
-- `PoolNotFound` - No pool exists for this hunt_id
-- `InvalidAmount` - Cap is negative (negative caps silently block distributions)
+* `NotInitialized` - Contract has not been initialized (no admin set)
+* `Unauthorized` - Caller is not the contract admin
+* `PoolNotFound` - No pool exists for this hunt_id
+* `InvalidAmount` - Cap is negative (negative caps silently block distributions)
 
 **Signature:**
 
@@ -7590,30 +8191,46 @@ pub fn set_daily_pool_cap(env: Env, admin: Address, hunt_id: u64, cap: i128) -> 
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -7637,34 +8254,60 @@ pub fn set_daily_global_cap(env: Env, admin: Address, cap: i128) -> Result<(), R
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
 #### `distribute_rewards`
+
+Resolves the configured amount for a frozen completion rank, if any.
+Rank zero is used by legacy/direct callers and deliberately does not
+match a tier.
+Applies the canonical rank-tier amount, if one matches. The completion
+rank is supplied by the trusted HuntyCore boundary and is already
+frozen at completion time.
+Legacy entrypoint retained for existing integrations. New contract
+integrations should use `distribute_rewards_authorized`, which carries
+and authenticates the calling contract explicitly.
 
 **Signature:**
 
@@ -7685,30 +8328,113 @@ pub fn distribute_rewards(env: Env, hunt_id: u64, player_address: Address, rewar
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
+
+---
+
+#### `distribute_rewards_authorized`
+
+Distribution entrypoint for an explicitly authenticated caller contract.
+
+**Signature:**
+
+```rust
+pub fn distribute_rewards_authorized(env: Env, caller: Address, hunt_id: u64, player_address: Address, reward_config: RewardConfig) -> Result<(), RewardErrorCode>
+```
+
+**Parameters:**
+
+- `env: Env`
+- `caller: Address`
+- `hunt_id: u64`
+- `player_address: Address`
+- `reward_config: RewardConfig`
+
+**Returns:** `Result<(), RewardErrorCode>`
+
+**Error type:** `RewardErrorCode`
+
+**Error codes:**
+
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -7724,10 +8450,9 @@ fails validation, the entire batch is rejected with no state changes.
 
 The two-phase design (validate-all, execute-all) means callers get a
 simple all-or-nothing contract:
-
 - If the function returns `Ok(())`, every entry was processed.
 - If it returns `Err(_)`, no tokens were moved and no distribution
-  records were created.
+records were created.
 
 # Gas limit consideration
 
@@ -7736,21 +8461,21 @@ transaction within Soroban's per-transaction instruction budget even
 when every entry performs both XLM and NFT operations.
 
 # Arguments
-
-- `distributions` - A `Vec` of `BatchDistributionEntry`, each containing
-  a `hunt_id`, `player_address`, and `reward_config`.
+* `distributions` - A `Vec` of `BatchDistributionEntry`, each containing
+a `hunt_id`, `player_address`, and `reward_config`.
 
 # Errors
-
-- `InvalidConfig` - Batch is empty or an entry has an invalid config.
-- `BatchTooLarge` - Batch exceeds `MAX_BATCH_SIZE`.
-- `AlreadyDistributed` - A player has already received a reward for this hunt.
-- `ReplayDetected` - Distribution nonce inconsistency for an entry.
-- `InsufficientPool` - A pool cannot cover the combined XLM amount for its hunt.
-- `BelowMinimumAmount` - An entry's XLM amount is below the pool's minimum.
-- `PoolNotFound` - No pool exists for an entry's hunt_id.
-- `NotInitialized` - XLM token address not set.
-- `Unauthorized` - Caller is not an authorized contract.
+* `InvalidConfig` - Batch is empty or an entry has an invalid config.
+* `BatchTooLarge` - Batch exceeds `MAX_BATCH_SIZE`.
+* `AlreadyDistributed` - A player has already received a reward for this hunt.
+* `ReplayDetected` - Distribution nonce inconsistency for an entry.
+* `InsufficientPool` - A pool cannot cover the combined XLM amount for its hunt.
+* `BelowMinimumAmount` - An entry's XLM amount is below the pool's minimum.
+* `PoolNotFound` - No pool exists for an entry's hunt_id.
+* `NotInitialized` - XLM token address not set.
+* `Unauthorized` - Caller is not an authorized contract.
+Legacy batch entrypoint retained for existing integrations. New
+contract integrations should use `distribute_batch_authorized`.
 
 **Signature:**
 
@@ -7769,30 +8494,111 @@ pub fn distribute_batch(env: Env, distributions: Vec<BatchDistributionEntry>) ->
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
+
+---
+
+#### `distribute_batch_authorized`
+
+Batch distribution entrypoint for an explicitly authenticated caller.
+
+**Signature:**
+
+```rust
+pub fn distribute_batch_authorized(env: Env, caller: Address, distributions: Vec<BatchDistributionEntry>) -> Result<(), RewardErrorCode>
+```
+
+**Parameters:**
+
+- `env: Env`
+- `caller: Address`
+- `distributions: Vec<BatchDistributionEntry>`
+
+**Returns:** `Result<(), RewardErrorCode>`
+
+**Error type:** `RewardErrorCode`
+
+**Error codes:**
+
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -7805,21 +8611,18 @@ and the pending mint data is stored. This function allows the admin to
 retry the failed NFT mint and update the distribution record.
 
 # Arguments
-
-- `admin` - The contract admin address
-- `hunt_id` - The hunt associated with the failed NFT mint
-- `player` - The player who should receive the NFT
+* `admin` - The contract admin address
+* `hunt_id` - The hunt associated with the failed NFT mint
+* `player` - The player who should receive the NFT
 
 # Returns
-
 The NFT ID of the successfully minted NFT
 
 # Errors
-
-- `NotInitialized` - Contract not initialized
-- `Unauthorized` - Caller is not the contract admin
-- `NftMintPendingNotFound` - No pending failed NFT mint for this hunt/player
-- `NftMintFailed` - NFT mint attempt failed again
+* `NotInitialized` - Contract not initialized
+* `Unauthorized` - Caller is not the contract admin
+* `NftMintPendingNotFound` - No pending failed NFT mint for this hunt/player
+* `NftMintFailed` - NFT mint attempt failed again
 
 **Signature:**
 
@@ -7840,30 +8643,46 @@ pub fn retry_failed_nft_mint(env: Env, admin: Address, hunt_id: u64, player: Add
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -7899,11 +8718,10 @@ All new integrations must use `distribute_rewards` instead.
 
 This function wraps `distribute_rewards` and therefore inherits all the same
 security constraints:
-
 - Replays are rejected via the same nonce-based mechanism
 - The ReentrancyGuard is acquired identically
 - `min_distribution_amount` and daily caps are enforced
-- Authorization checks are identical (fail-open by caller)
+- Authorization is fail-closed: the immediate invoker must be an approved contract and the allowlist must not be empty
 
 **Removal timeline:** This function is scheduled for removal in a future major release.
 The exact deprecation timeline will be announced in contract release notes.
@@ -7913,19 +8731,16 @@ The exact deprecation timeline will be announced in contract release notes.
 The legacy path is not a bypass vector.
 
 # Arguments
-
-- `player` - The address receiving the distribution
-- `hunt_id` - The hunt pool to distribute from
-- `xlm_amount` - Token amount to distribute (0 = no token transfer)
-- `_nft_enabled` - Ignored; NFTs are not supported on this path
+* `player` - The address receiving the distribution
+* `hunt_id` - The hunt pool to distribute from
+* `xlm_amount` - Token amount to distribute (0 = no token transfer)
+* `_nft_enabled` - Ignored; NFTs are not supported on this path
 
 # Returns
-
 - `true` if the distribution succeeded
 - `false` if the distribution failed (check the transaction result for the error code)
 
 # Differences from `distribute_rewards`
-
 - Returns `bool` instead of `Result<(), RewardErrorCode>` (loses error detail)
 - Discards `_nft_enabled` parameter (NFTs cannot be distributed)
 - No structured logging of the error
@@ -8039,7 +8854,7 @@ pub fn verify_distribution(env: Env, pool_id: u64, player: Address, amount: i128
 
 Distribute a proportional share of the pool based on player score.
 
-Amount = floor((player_score / total_scores) \* pool_balance).
+Amount = floor((player_score / total_scores) * pool_balance).
 Remainder stays in the pool. Enforces min_distribution_amount when set.
 Requires the pool's distribution_mode to be Proportional (or will still
 compute proportionally when called via this entry point).
@@ -8066,30 +8881,46 @@ pub fn distribute_proportional(env: Env, hunt_id: u64, player: Address, player_s
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -8165,15 +8996,13 @@ Setting this to `0` disables vesting and reverts to instant payouts for
 future distributions (already-pending vesting records are unaffected).
 
 # Arguments
-
-- `creator` - Pool owner (must match stored creator)
-- `hunt_id` - The hunt whose pool to configure
-- `vesting_period_secs` - Vesting duration in seconds (0 = disabled)
+* `creator` - Pool owner (must match stored creator)
+* `hunt_id` - The hunt whose pool to configure
+* `vesting_period_secs` - Vesting duration in seconds (0 = disabled)
 
 # Errors
-
-- `PoolNotFound` - Pool does not exist
-- `Unauthorized` - Caller is not the pool creator
+* `PoolNotFound` - Pool does not exist
+* `Unauthorized` - Caller is not the pool creator
 
 **Signature:**
 
@@ -8194,30 +9023,46 @@ pub fn set_vesting_period_secs(env: Env, creator: Address, hunt_id: u64, vesting
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -8232,20 +9077,17 @@ Each call transfers whatever has newly vested since the last claim.
 Once `claimed_amount == total_amount` the schedule is fully exhausted.
 
 # Arguments
-
-- `player` - The player claiming their vested reward
-- `hunt_id` - The hunt whose vesting record to claim from
+* `player` - The player claiming their vested reward
+* `hunt_id` - The hunt whose vesting record to claim from
 
 # Returns
-
 The XLM amount (in stroops) transferred to the player.
 
 # Errors
-
-- `VestingNotStarted` - No vesting record exists for this (hunt_id, player)
-- `VestingAlreadyClaimed` - Full vesting amount has already been claimed
-- `NothingToVest` - Nothing has vested yet at the current timestamp
-- `InsufficientPool` - Contract token balance is too low (should not normally occur)
+* `VestingNotStarted` - No vesting record exists for this (hunt_id, player)
+* `VestingAlreadyClaimed` - Full vesting amount has already been claimed
+* `NothingToVest` - Nothing has vested yet at the current timestamp
+* `InsufficientPool` - Contract token balance is too low (should not normally occur)
 
 **Signature:**
 
@@ -8265,30 +9107,46 @@ pub fn claim_vested(env: Env, player: Address, hunt_id: u64) -> Result<i128, Rew
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -8325,17 +9183,15 @@ or `Refunded` when the automatic distribution process could not finish
 operation and does not move funds.
 
 # Arguments
-
-- `admin` - The contract admin address (must match the stored admin)
-- `hunt_id` - The hunt whose distribution to resolve
-- `player` - The player whose distribution to resolve
-- `resolution` - Outcome: `ResolutionStatus::Completed` or `ResolutionStatus::Refunded`
+* `admin` - The contract admin address (must match the stored admin)
+* `hunt_id` - The hunt whose distribution to resolve
+* `player` - The player whose distribution to resolve
+* `resolution` - Outcome: `ResolutionStatus::Completed` or `ResolutionStatus::Refunded`
 
 # Errors
-
-- `NotInitialized` - Contract has not been initialized (no admin set)
-- `Unauthorized` - Caller is not the contract admin
-- `DistributionNotFound` - No distribution record exists for this hunt/player
+* `NotInitialized` - Contract has not been initialized (no admin set)
+* `Unauthorized` - Caller is not the contract admin
+* `DistributionNotFound` - No distribution record exists for this hunt/player
 
 **Signature:**
 
@@ -8357,30 +9213,46 @@ pub fn admin_resolve_distribution(env: Env, admin: Address, hunt_id: u64, player
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -8389,13 +9261,11 @@ pub fn admin_resolve_distribution(env: Env, admin: Address, hunt_id: u64, player
 Returns a paginated list of distributions made from a specific reward pool.
 
 # Arguments
-
-- `hunt_id` - The hunt whose pool distributions to query
-- `offset` - Starting index for pagination (0-based)
-- `limit` - Maximum number of entries to return
+* `hunt_id` - The hunt whose pool distributions to query
+* `offset` - Starting index for pagination (0-based)
+* `limit` - Maximum number of entries to return
 
 # Returns
-
 A Vec of PoolDistribution entries containing player addresses and distribution details.
 Returns an empty Vec if the pool has no distributions or offset is beyond the list.
 
@@ -8421,11 +9291,9 @@ pub fn get_pool_distributions(env: Env, hunt_id: u64, offset: u32, limit: u32) -
 Returns the total count of distributions made from a specific reward pool.
 
 # Arguments
-
-- `hunt_id` - The hunt whose pool distribution count to query
+* `hunt_id` - The hunt whose pool distribution count to query
 
 # Returns
-
 The total number of distributions for the pool.
 
 **Signature:**
@@ -8456,13 +9324,11 @@ distributions are processed. If the pool has more entries than this limit,
 only the most recent entries (up to the limit) are analysed.
 
 # Arguments
-
-- `hunt_id` - The hunt whose pool analytics to query
-- `start_time` - Optional lower bound (inclusive) ledger timestamp filter
-- `end_time` - Optional upper bound (exclusive) ledger timestamp filter
+* `hunt_id` - The hunt whose pool analytics to query
+* `start_time` - Optional lower bound (inclusive) ledger timestamp filter
+* `end_time` - Optional upper bound (exclusive) ledger timestamp filter
 
 # Returns
-
 A `DistributionAnalytics` struct with count, total, average, median, min, max.
 All fields are zero when the pool has no distributions or no entries match
 the time filter.
@@ -8497,19 +9363,17 @@ cancelled. This prevents draining pools while a hunt is active and players may
 still be mid-game. When HuntyCore is configured, the hunt status is verified.
 
 # Arguments
-
-- `admin` - The contract admin address (must match the stored admin)
-- `hunt_id` - The hunt whose remaining pool balance to withdraw
-- `recipient` - The address that will receive the withdrawn XLM
-- `amount` - The amount to withdraw. Must be positive (> 0).
+* `admin` - The contract admin address (must match the stored admin)
+* `hunt_id` - The hunt whose remaining pool balance to withdraw
+* `recipient` - The address that will receive the withdrawn XLM
+* `amount` - The amount to withdraw. Must be positive (> 0).
 
 # Errors
-
-- `NotInitialized` - Contract has not been initialized (no admin set)
-- `Unauthorized` - Caller is not the contract admin
-- `PoolNotFound` - No pool exists for this hunt_id
-- `InvalidAmount` - Amount is <= 0, or exceeds the available pool balance
-- `SourcePoolNotEligible` - Hunt is still active (not ended or cancelled)
+* `NotInitialized` - Contract has not been initialized (no admin set)
+* `Unauthorized` - Caller is not the contract admin
+* `PoolNotFound` - No pool exists for this hunt_id
+* `InvalidAmount` - Amount is <= 0, or exceeds the available pool balance
+* `SourcePoolNotEligible` - Hunt is still active (not ended or cancelled)
 
 **Signature:**
 
@@ -8531,30 +9395,46 @@ pub fn admin_withdraw_unclaimed(env: Env, admin: Address, hunt_id: u64, recipien
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -8571,18 +9451,16 @@ cancelled. This prevents draining pools while a hunt is active and players may
 still be mid-game. When HuntyCore is configured, the hunt status is verified.
 
 # Arguments
-
-- `admin` - The contract admin address (must match the stored admin)
-- `hunt_id` - The hunt whose pool to drain completely
-- `recipient` - The address that will receive the full pool balance
+* `admin` - The contract admin address (must match the stored admin)
+* `hunt_id` - The hunt whose pool to drain completely
+* `recipient` - The address that will receive the full pool balance
 
 # Errors
-
-- `NotInitialized` - Contract has not been initialized (no admin set)
-- `Unauthorized` - Caller is not the contract admin
-- `PoolNotFound` - No pool exists for this hunt_id
-- `InvalidAmount` - Pool balance is zero (nothing to withdraw)
-- `SourcePoolNotEligible` - Hunt is still active (not ended or cancelled)
+* `NotInitialized` - Contract has not been initialized (no admin set)
+* `Unauthorized` - Caller is not the contract admin
+* `PoolNotFound` - No pool exists for this hunt_id
+* `InvalidAmount` - Pool balance is zero (nothing to withdraw)
+* `SourcePoolNotEligible` - Hunt is still active (not ended or cancelled)
 
 **Signature:**
 
@@ -8603,37 +9481,53 @@ pub fn admin_withdraw_all(env: Env, admin: Address, hunt_id: u64, recipient: Add
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
 #### `pause`
 
 Pauses the contract, preventing reward distributions and withdrawals.
-Only the contract admin can call this. Emits an emergency event.
+Only the contract admin can call this. Emits a ContractPausedEvent.
 
 **Signature:**
 
@@ -8653,30 +9547,46 @@ pub fn pause(env: Env, admin: Address, reason: soroban_sdk::String) -> Result<()
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -8702,30 +9612,46 @@ pub fn unpause(env: Env, admin: Address) -> Result<(), RewardErrorCode>
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -8768,30 +9694,46 @@ pub fn pause_funding(env: Env, admin: Address) -> Result<(), RewardErrorCode>
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -8816,30 +9758,46 @@ pub fn unpause_funding(env: Env, admin: Address) -> Result<(), RewardErrorCode>
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -8864,30 +9822,46 @@ pub fn pause_distribution(env: Env, admin: Address) -> Result<(), RewardErrorCod
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -8912,30 +9886,46 @@ pub fn unpause_distribution(env: Env, admin: Address) -> Result<(), RewardErrorC
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -8943,7 +9933,7 @@ pub fn unpause_distribution(env: Env, admin: Address) -> Result<(), RewardErrorC
 
 Effective pause state as `(global, funding, distribution)`.
 
-The two granular values are the _effective_ ones, so they read `true`
+The two granular values are the *effective* ones, so they read `true`
 whenever the global stop is engaged. Mirrors `HuntyCore::get_pause_state`.
 
 **Signature:**
@@ -8989,18 +9979,16 @@ When `hunt_id` is 0, all pools with non-zero balances are drained.
 When `all_pools` is true, iterates all hunts up to `max_hunt_id` and withdraws.
 
 # Arguments
-
-- `admin` - The contract admin address
-- `hunt_id` - Specific hunt pool to drain (0 = all pools up to max_hunt_id)
-- `recipient` - Address to receive the withdrawn funds
-- `reason` - Reason for the emergency withdrawal (emitted in events)
-- `max_hunt_id` - When hunt_id is 0, drains all pools from 1..=max_hunt_id
+* `admin` - The contract admin address
+* `hunt_id` - Specific hunt pool to drain (0 = all pools up to max_hunt_id)
+* `recipient` - Address to receive the withdrawn funds
+* `reason` - Reason for the emergency withdrawal (emitted in events)
+* `max_hunt_id` - When hunt_id is 0, drains all pools from 1..=max_hunt_id
 
 # Errors
-
-- `NotInitialized` - Contract not initialized
-- `Unauthorized` - Caller is not admin
-- `ContractPaused` - Contract must be paused to call this
+* `NotInitialized` - Contract not initialized
+* `Unauthorized` - Caller is not admin
+* `ContractPaused` - Contract must be paused to call this
 
 **Signature:**
 
@@ -9023,30 +10011,46 @@ pub fn emergency_withdraw(env: Env, admin: Address, hunt_id: u64, recipient: Add
 
 **Error codes:**
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ---
 
@@ -9089,6 +10093,8 @@ pub fn contract_version(env: Env) -> u32
 #### `check_nft_reward_compatibility`
 
 Returns true if the given NftReward contract meets the minimum required version.
+Returns false on any error (e.g. the address is not an nft-reward contract
+or an old one without `contract_version`) instead of trapping.
 
 **Signature:**
 
@@ -9305,14 +10311,14 @@ pub fn rollback_migration(env: Env, admin: Address) -> Result<migration::Migrati
 **Signature:**
 
 ```rust
-pub fn get_health_dashboard(env: Env) -> monitoring::ContractHealth
+pub fn get_health_dashboard(env: Env) -> hunty_common::monitoring::ContractHealth
 ```
 
 **Parameters:**
 
 - `env: Env`
 
-**Returns:** `monitoring::ContractHealth`
+**Returns:** `hunty_common::monitoring::ContractHealth`
 
 ---
 
@@ -9391,6 +10397,7 @@ pub fn get_pool_audit_log(env: Env, hunt_id: u64, start_after: Option<u64>, limi
 - `AdminAlreadyProposed` = 48
 - `InvalidPoints` = 49
 - `HuntFull` = 50
+- `LeaderboardVisibilityUnauthorized` = 51
 
 ## `NftErrorCode`
 
@@ -9413,33 +10420,51 @@ pub fn get_pool_audit_log(env: Env, hunt_id: u64, start_after: Option<u64>, limi
 - `InvalidExtensionValue` = 17
 - `ExtensionNotFound` = 18
 - `InvalidMaxSupply` = 19
+- `InvalidRoyalty` = 20
+- `InvalidImageUri` = 21
 
 ## `RewardErrorCode`
 
-- `NotInitialized` = 1
-- `InsufficientPool` = 2
-- `AlreadyDistributed` = 3
-- `TransferFailed` = 4
-- `InvalidAmount` = 5
-- `InvalidConfig` = 6
-- `NftMintFailed` = 7
-- `PoolAlreadyExists` = 8
-- `PoolNotFound` = 9
-- `Unauthorized` = 10
-- `BelowMinimumAmount` = 11
-- `AlreadyInitialized` = 12
-- `HuntNotFound` = 13
-- `ReentrancyDetected` = 14 - A recursive distribution attempt was detected during an external XLM or NFT call.
-- `PoolBalanceDivergence` = 15 - The tracked pool balance diverged from the actual XLM token balance.
-- `PoolBalanceOverflow` = 16 - Pool balance would overflow if this funding amount is added (pool balance limit exceeded).
-- `BelowMinimumFunding` = 17 - Funding amount is below the minimum required (dust attack prevention).
-- `ExceedsMaximumFunding` = 18 - Funding amount exceeds the maximum single funding limit.
-- `DailyCapExceeded` = 19 - Daily distribution cap for a specific pool has been exceeded.
-- `GlobalDailyCapExceeded` = 20 - Global daily distribution cap has been exceeded.
-- `ContractPaused` = 21 - Contract is paused and cannot perform operations.
-- `EmergencyWithdrawalFailed` = 22 - Emergency withdrawal failed.
-- `FundingPaused` = 23 - Pool funding is paused (issue #628). Distribution may still be running.
-- `DistributionPaused` = 24 - Reward distribution is paused (issue #628). Funding may still be open.
+- `NotInitialized` = 2001
+- `InsufficientPool` = 2002
+- `AlreadyDistributed` = 2003
+- `TransferFailed` = 2004
+- `InvalidAmount` = 2005
+- `InvalidConfig` = 2006
+- `NftMintFailed` = 2007
+- `PoolAlreadyExists` = 2008
+- `PoolNotFound` = 2009
+- `Unauthorized` = 2010
+- `BelowMinimumAmount` = 2011
+- `AlreadyInitialized` = 2012
+- `HuntNotFound` = 2013
+- `ReentrancyDetected` = 2014
+- `PoolBalanceDivergence` = 2015
+- `ReplayDetected` = 2016
+- `PoolBalanceOverflow` = 2017
+- `BelowMinimumFunding` = 2018
+- `ExceedsMaximumFunding` = 2019
+- `DailyCapExceeded` = 2020
+- `GlobalDailyCapExceeded` = 2021
+- `ContractPaused` = 2022
+- `NftMintPendingNotFound` = 2023
+- `DistributionNotFound` = 2024
+- `SourcePoolNotEligible` = 2025
+- `DestinationPoolNotFound` = 2026
+- `InvalidMigration` = 2027
+- `PoolFrozen` = 2028
+- `DistributionRateLimited` = 2029
+- `BatchTooLarge` = 2030
+- `InvalidScore` = 2031
+- `InvalidTokenContract` = 2032
+- `VestingNotStarted` = 2033
+- `VestingAlreadyClaimed` = 2034
+- `NothingToVest` = 2035
+- `VestingNotConfigured` = 2036
+- `FundingPaused` = 2037
+- `DistributionPaused` = 2038
+- `TooManyFunders` = 2039
+- `InvalidHuntStatus` = 2040
 
 ## `UpgradeAuthError`
 
